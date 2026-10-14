@@ -9,8 +9,8 @@ export function formatUuid(bytes: Uint8Array): string {
 }
 
 /**
- * A new random (version 4) visitor ID, the same rules as runtime-tracking's visitor-id.ts
- * (copied, not imported: a workspace must not depend on an app).
+ * A new random (version 4) visitor ID, created the same way the Pertento browser snippet
+ * creates its visitor IDs.
  *
  * crypto.randomUUID exists only in secure contexts, so getRandomValues is the fallback.
  * Math.random is never used: its collisions across millions of visitors would merge

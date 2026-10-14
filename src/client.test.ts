@@ -158,19 +158,25 @@ describe('refresh', () => {
     pertento.close();
   });
 
-  test('401 stops polling, rejects ready() at once and logs once', async () => {
+  test('401 past the grace window stops polling, rejects ready() at once and logs twice', async () => {
     const { fetch, calls } = fakeFetch({ status: 401, body: { error: 'Invalid server key' } });
     const pertento = client(fetch, { background: false });
-    await expect(pertento.ready(5_000)).rejects.toThrow('Invalid server key');
+    await expect(pertento.ready(50)).rejects.toThrow('Invalid server key');
 
     setSystemTime(new Date(Date.now() + 10 * 60_000));
     expect(await pertento.getVariant('new-checkout', { visitorId: VISITOR })).toEqual(unknownKey);
     await tick();
     await expect(pertento.ready()).rejects.toThrow('stopped');
 
-    expect(calls).toHaveLength(1);
+    setSystemTime(new Date(Date.now() + 20 * 60_000));
+    await pertento.getVariant('new-checkout', { visitorId: VISITOR });
+    await tick();
+
+    expect(calls).toHaveLength(2);
     expect(pertento.lastError).toMatchObject({ kind: 'unauthorized', status: 401 });
-    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(pertento.lastError?.message).toContain('Config polling has stopped');
+    // One line when the key is first refused, one when polling gives up.
+    expect(consoleError).toHaveBeenCalledTimes(2);
   });
 
   test('refuses a config version it does not understand, as no config', async () => {

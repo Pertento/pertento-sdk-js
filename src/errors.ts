@@ -1,6 +1,9 @@
 /** What went wrong. Stable strings, safe to branch on in your own code. */
 export type PertentoErrorKind =
-  /** The server key was refused (401). Config polling stops; create a new key in the dashboard. */
+  /**
+   * The server key was refused (401). Config polling retries for a grace period (a new key
+   * takes a moment to become active), then stops; create a new key in the dashboard.
+   */
   | 'unauthorized'
   /** The website has no SDK config (404). */
   | 'not-found'
@@ -42,9 +45,12 @@ export type PertentoError = {
 
 export type ReportedError = Omit<PertentoError, 'at'>;
 
+/** `alwaysLog` logs even when this source and kind were logged before: for a change of state worth a second line. */
+export type ReportOptions = { alwaysLog?: boolean };
+
 export type ErrorReporter = {
   /** Records the error as `last` and logs it, once per source and kind for the client's lifetime. */
-  report: (error: ReportedError) => PertentoError;
+  report: (error: ReportedError, options?: ReportOptions) => PertentoError;
   /** Clears `last` when it came from `source`: that part of the SDK has recovered. */
   clear: (source: PertentoErrorSource) => void;
   last: () => PertentoError | null;
@@ -62,11 +68,11 @@ export function createErrorReporter({ now, log }: CreateErrorReporterParams): Er
   const logged = new Set<string>();
 
   return {
-    report: (error) => {
+    report: (error, options) => {
       const recorded: PertentoError = { ...error, at: now() };
       last = recorded;
       const onceKey = `${error.source}:${error.kind}`;
-      if (!logged.has(onceKey)) {
+      if (!logged.has(onceKey) || options?.alwaysLog === true) {
         logged.add(onceKey);
         log(`[pertento] ${error.source}: ${error.message}`);
       }

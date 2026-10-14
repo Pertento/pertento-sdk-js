@@ -44,8 +44,10 @@ export type Identity = DecideIdentity;
 export type Pertento = {
   /**
    * Resolves once the first config is loaded. Rejects after `timeoutMs` (default 5000), or at
-   * once if the server key was refused, but the client keeps working and keeps trying either
-   * way: until a config arrives every flag resolves to control with reason `unknown-key`.
+   * once if polling has stopped. The client keeps working either way, and keeps trying unless
+   * polling stopped: until a config arrives every flag resolves to control with reason
+   * `unknown-key`. A refused key (401) is retried for 2 minutes, since a key just created takes
+   * up to about 30 seconds to become active; only then does polling stop for good.
    */
   ready: (timeoutMs?: number) => Promise<void>;
   /**
@@ -68,8 +70,10 @@ export type Pertento = {
   ) => string;
   /**
    * Reports a conversion from your backend to `POST /sdk/events`. Needs the website's tracking
-   * method set to "Server (SDK)". At most once: no retry, 2 s timeout. Never rejects; check
-   * `ok` on the result, or `lastError`.
+   * method set to "Server (SDK)". `keys` is required: the flag keys this person was decided on
+   * (what you passed to `getVariant` or `getAll`), and `attributes` must be the ones used then.
+   * At most once: no retry, 2 s timeout. Never rejects; missing or invalid `keys` sends nothing
+   * and resolves `ok: false`. Check `ok` on the result, or `lastError`.
    */
   track: (event: string, options: TrackOptions) => Promise<TrackResult>;
   /**
@@ -170,7 +174,7 @@ export function createPertento(options: PertentoOptions): Pertento {
     seedScript,
 
     track: (event, trackOptions) =>
-      sendTrack({ baseUrl, serverKey, fetch, errors, event, options: trackOptions ?? {} }),
+      sendTrack({ baseUrl, serverKey, fetch, errors, event, options: trackOptions }),
 
     get lastError() {
       return errors.last();

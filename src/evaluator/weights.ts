@@ -5,8 +5,23 @@ import { BUCKET_COUNT } from './constants';
 export const normaliseWeight = (weight: unknown): number =>
   typeof weight === 'number' && Number.isFinite(weight) && weight > 0 ? Math.floor(weight) : 0;
 
-/** A copy sorted by id ascending: control (the lowest id) first. */
-export const sortById = (variants: readonly SdkVariant[]): SdkVariant[] => [...variants].sort((a, b) => a.id - b.id);
+/** A non-null, non-array object: what a config entry must be to be read at all. */
+export const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * A copy sorted by id ascending: control (the lowest id) first. Entries that are not
+ * objects are dropped. Equal ids keep their config order: the tie-break on the original
+ * index makes that explicit rather than relying on the engine's sort being stable.
+ */
+export function sortById(variants: readonly SdkVariant[]): SdkVariant[] {
+  if (!Array.isArray(variants)) return [];
+  return variants
+    .map((variant, index) => ({ variant, index }))
+    .filter((entry): entry is { variant: SdkVariant; index: number } => isObject(entry.variant))
+    .sort((a, b) => a.variant.id - b.variant.id || a.index - b.index)
+    .map(({ variant }) => variant);
+}
 
 /**
  * The variant a bucket falls in: a cumulative walk over the weights in id order.

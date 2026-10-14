@@ -40,6 +40,13 @@ const pertento = createPertento({
 await pertento.ready(); // optional: waits up to 5 s for the first config
 ```
 
+> **Required: persist the visitor ID and send it back.** Pertento sets no cookies, so your
+> server has to remember who the visitor is. Store the visitor ID the first time you mint it
+> (in your session, or a first-party cookie you set) and pass the same ID on every later request
+> for that person. A request without it is a new visitor: they are bucketed afresh on every page
+> and their conversions land on unrelated variants. See
+> [Carrying the visitor ID](#carrying-the-visitor-id).
+
 On each request:
 
 ```ts
@@ -131,7 +138,13 @@ The same customer then gets the same variant on every device. Things to know:
 - **IDs are opaque and case-sensitive.** `Cust-1` and `cust-1` are two different people. Pass
   exactly the same string every time; do not trim, lowercase or reformat it.
 - **Pertento never stores your customer ID.** It derives a random-looking enrolment ID from it
-  with the website's secret salt (`decision.enrolAs`), and enrols and counts that.
+  with the website's secret salt (`decision.enrolAs`), and enrols and counts that. The
+  enrolment ID is still pseudonymous data, not anonymous: anyone holding the salt can compute
+  it from a customer ID and link the two.
+- **Use opaque customer IDs.** A server key also gives access to the website's bucketing salt
+  (`GET /sdk/config` returns it), so whoever holds the key can derive the enrolment ID of any
+  customer ID they can guess. Prefer IDs that are not sequential or guessable (a UUID, or a
+  keyed hash of your internal ID) over `1`, `2`, `3`, and guard the key like a password.
 - **Visitor counts are not comparable across ID kinds.** A customer-ID experiment counts
   customers; a visitor experiment counts browsers. Compare arms within an experiment, not totals
   between experiments of different kinds.
@@ -143,15 +156,26 @@ The same customer then gets the same variant on every device. Things to know:
 
 ```ts
 const result = await pertento.track('purchase', {
+  keys: ['new-checkout'],             // the flag keys you decided this person on
   visitorId,                          // or id: String(user.id), or both
-  attributes: { plan: user.plan },    // the same attributes you decide with
+  attributes: { plan: user.plan },    // the same attributes you decided with
   data: { revenue: 4900, currency: 'SEK' },
 });
 if (!result.ok) console.warn(result.error.kind, result.error.message);
 ```
 
-`track()` posts to `POST /sdk/events`. Pertento works out which experiments and variants the
-person is in from the ID you send, so your server needs no extra bookkeeping. The rules:
+`track()` posts to `POST /sdk/events`. Pertento decides `keys` again for the ID you send and
+credits the conversion to the experiments among them that the person is enrolled in, so your
+server needs no extra bookkeeping. The rules:
+
+- **`keys` is required.** Pass the flag keys you passed to `getVariant` or `getAll` for this
+  person (1 to 50 keys, each lowercase letters, digits and hyphens, at most 64 characters). Only
+  those experiments are credited, so a conversion never counts in an experiment the person was
+  never shown. Missing or invalid `keys` sends nothing: `track()` resolves `{ ok: false }` with
+  kind `bad-request` and records the reason in `lastError`.
+- **`attributes` must match the ones you decided with.** Targeting rules are evaluated again,
+  so leaving `attributes` out, or sending different values, drops an experiment with attribute
+  rules from the attribution although the person was enrolled in it.
 
 - **One reporter per website.** `track()` works only when the website's tracking method is
   **Server (SDK)**. In that mode the browser snippet reports nothing, so conversions are never
@@ -175,8 +199,9 @@ next succeeds.
 
 | Situation | What happens |
 | --- | --- |
-| Config request fails (network, 5xx, 429) | The last good config keeps being used; the next poll tries again. |
-| Server key refused (401) | Polling stops for good; `ready()` rejects. Create a new key and restart. |
+| Config request fails (network, 5xx) | The last good config keeps being used; the next poll tries again. |
+| 503 or 429, with `Retry-After` | The last good config keeps being used; the next request waits as long as `Retry-After` asks (1 second to 5 minutes), even past a poll. The tracking server answers 503 while it starts up. |
+| Server key refused (401) | Retried with backoff (2 seconds, doubling to 30) for 2 minutes, since a key just created takes up to about 30 seconds to become active. Any other answer ends the run. After 2 minutes of nothing but 401s, polling stops for good and `ready()` rejects: check the key, or create a new one and restart. The last good config, if any, keeps being used. |
 | Config of a newer version than this SDK understands | Treated as no config (every key `unknown-key`). Upgrade the package. |
 | Server key belongs to another website than `websiteId` | Treated as no config. Fix the settings. |
 
@@ -239,7 +264,7 @@ createPertento({
   getAll(identity?): Promise<Record<string, Decision>>,
   createVisitorId(): string,
   seedScript(decisions: Decision[] | Record<string, Decision>, visitorId?: string, options?: { nonce?: string }): string,
-  track(event: string, options: { visitorId?, id?, attributes?, data? }): Promise<TrackResult>,
+  track(event: string, options: { keys: string[], visitorId?, id?, attributes?, data? }): Promise<TrackResult>,
   readonly lastError: PertentoError | null,
   close(): void,
 }
@@ -256,7 +281,9 @@ numbers. Types are never coerced: `"5"` does not match a rule on the number `5`.
 Every endpoint is on `https://tracking.pertento.ai`, authenticated with
 `Authorization: Bearer psk_live_...`, and rate limited per key. Errors answer
 `{ "error": "message" }` with the status (400 bad body, 401 bad key, 404 no config,
-409 wrong tracking method, 429 too many requests).
+409 wrong tracking method, 429 too many requests, 503 starting up). A key just created can be
+answered 401 for up to about 30 seconds; retry with backoff for a short while before treating it
+as wrong. On 503 or 429, wait as long as `Retry-After` says when it is present.
 
 ### `POST /sdk/decide`
 
@@ -271,18 +298,25 @@ curl https://tracking.pertento.ai/sdk/decide \
 
 Body: `keys` (optional, at most 50; all experiments when absent), `visitorId` (a UUID), `id`
 (your customer ID, at most 256 characters), `attributes` (at most 50 entries, 4 KB). When you
-send no ID at all, a new visitor ID is minted and returned.
+send no ID at all, a new visitor ID is minted and returned with `visitorIdMinted: true`.
 
 ```json
 {
   "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+  "visitorIdMinted": false,
   "decisions": { "new-checkout": { "experimentId": 501, "variantId": 9002, "variantKey": "one-page", "payload": { "layout": "single" }, "enrolled": true } },
   "seed": { "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301", "assignments": { "501": { "variantId": "9002" } } }
 }
 ```
 
+**When `visitorIdMinted` is `true`, you must store the returned `visitorId`** (for example in
+your own session or a first-party cookie you set) and send it back as `visitorId` on every later
+`/sdk/decide` and `/sdk/events` for that person. Pertento sets no cookies and cannot see the
+browser's ID from here, so a caller that does not send it back makes every request a new
+visitor: each page is bucketed afresh and conversions land on unrelated variants.
+
 Write `seed` into the page as `window.PertentoSeed`, escaping `<`, `>`, `&`, U+2028 and U+2029 as
-`<`, `>`, `&`, ` `, ` ` so it cannot close the script element.
+`\u003c`, `\u003e`, `\u0026`, `\u2028`, `\u2029` so it cannot close the script element.
 
 ### `POST /sdk/events`
 
@@ -293,13 +327,15 @@ no retries). 600 requests a minute per key, shared with `/sdk/decide`.
 curl https://tracking.pertento.ai/sdk/events \
   -H "Authorization: Bearer $PERTENTO_SERVER_KEY" \
   -H "Content-Type: application/json" \
-  -d '{ "events": [{ "name": "purchase", "data": { "revenue": 4900, "currency": "SEK" } }], "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301" }'
+  -d '{ "events": [{ "name": "purchase", "data": { "revenue": 4900, "currency": "SEK" } }], "keys": ["new-checkout"], "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301", "attributes": { "plan": "pro" } }'
 ```
 
 Body: `events` (1 to 20, each `{ name, data? }`, name at most 100 characters, data at most
-8 KB), and `visitorId`, `id` or both (one is required), plus optional `attributes`. Answers
-`{ "ok": true, "experimentVariantMap": { "501": "9002" } }`: the experiments the events were
-attributed to.
+8 KB), `keys` (required, 1 to 50 flag keys matching `^[a-z0-9][a-z0-9-]{0,63}$`: the keys this
+person was decided on), and `visitorId`, `id` or both (one is required), plus optional
+`attributes`, which must be the ones sent to `/sdk/decide`. Unknown fields are refused with 400.
+Answers `{ "ok": true, "experimentVariantMap": { "501": "9002" } }`: the experiments among
+`keys` that the person is enrolled in, which is what the events were attributed to.
 
 ### `GET /sdk/config`
 
