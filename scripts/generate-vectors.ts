@@ -1,0 +1,238 @@
+/**
+ * Writes spec/vectors.json from the evaluator itself.
+ *
+ *   bun scripts/generate-vectors.ts            # refuses to overwrite
+ *   bun scripts/generate-vectors.ts --force    # only together with a spec version bump
+ *
+ * The vectors are the contract every port (and every later change to this package) is
+ * held to, so they are generated once, after the RFC 4231 HMAC test passes, and then
+ * committed. Regenerating them silently would turn "the implementation is wrong" into
+ * "the vectors moved", which is exactly what they exist to catch.
+ */
+import type { DecideIdentity, Decision, SdkConfig, SdkExperiment } from '../src/evaluator';
+import { existsSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import {
+  bucketFor,
+  decide,
+  deriveEnrolmentId,
+  SDK_CONFIG_VERSION,
+  variantMapFor,
+} from '../src/evaluator';
+
+const OUT = resolve(import.meta.dir, '../spec/vectors.json');
+
+const SALT_A = '5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b';
+const SALT_B = '00ff10ee20dd30cc40bb50aa60997088';
+
+const BUCKET_IDS = [
+  '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+  '3F2504E0-4F89-41D3-9A0C-0305E82C3301',
+  'b7c6a1e2-0d4f-4a8b-9c3e-5f6a7b8c9d0e',
+  'customer-42',
+  'Customer-42',
+  '42',
+  'jane.doe@example.com',
+  'Kund-ÅÄÖ',
+  '顧客-7',
+  '🙂user',
+  'İstanbul',
+  'ΟΔΟΣ',
+];
+
+const ENROLMENT_CUSTOMER_IDS = [
+  '42',
+  'customer-42',
+  'Customer-42',
+  'jane.doe@example.com',
+  'Kund-ÅÄÖ',
+  '顧客-7',
+  '🙂user',
+];
+
+const VISITOR = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+
+const experiment = (overrides: Partial<SdkExperiment>): SdkExperiment => ({
+  id: 501,
+  key: 'new-checkout',
+  status: 'Running',
+  bucketOn: 'visitor',
+  variants: [
+    { id: 9001, key: 'control', weight: 5000, payload: { layout: 'classic' } },
+    { id: 9002, key: 'one-page', weight: 5000, payload: { layout: 'single', steps: 1 } },
+  ],
+  deployedVariantId: null,
+  targeting: [],
+  ...overrides,
+});
+
+const CONFIG: SdkConfig = {
+  version: SDK_CONFIG_VERSION,
+  websiteId: 77,
+  generatedAt: 1_760_400_000_000,
+  trackingMethod: 'server',
+  experiments: [
+    experiment({}),
+    experiment({
+      id: 502,
+      key: 'pricing-page',
+      bucketOn: 'customer_id',
+      variants: [
+        { id: 9011, key: 'control', weight: 3334, payload: null },
+        { id: 9012, key: 'annual-first', weight: 3333, payload: { default: 'annual' } },
+        { id: 9013, key: 'monthly-first', weight: 3333, payload: { default: 'monthly' } },
+      ],
+    }),
+    experiment({
+      id: 503,
+      key: 'pro-banner',
+      variants: [
+        { id: 9021, key: 'off', weight: 2000, payload: false },
+        { id: 9022, key: 'on', weight: 8000, payload: true },
+      ],
+      targeting: [
+        { attribute: 'plan', operator: 'in', value: ['pro', 'business'] },
+        { attribute: 'country', operator: 'not in', value: ['US'] },
+        { attribute: 'seats', operator: '>', value: 1 },
+        { attribute: 'beta', operator: 'exists' },
+      ],
+    }),
+    experiment({
+      id: 504,
+      key: 'old-search',
+      status: 'Deployed',
+      variants: [
+        { id: 9031, key: 'control', weight: 5000, payload: 'v1' },
+        { id: 9032, key: 'fuzzy', weight: 5000, payload: 'v2' },
+        { id: 9033, key: 'fuzzy', weight: 0, payload: 'v2' },
+      ],
+      deployedVariantId: 9033,
+    }),
+    experiment({
+      id: 505,
+      key: 'uneven-weights',
+      variants: [
+        { id: 9042, key: 'b', weight: 30, payload: null },
+        { id: 9041, key: 'a', weight: 70, payload: null },
+      ],
+    }),
+  ],
+};
+
+type DecisionCase = { name: string; input: DecideIdentity & { key: string } };
+
+const PRO_ATTRIBUTES = { plan: 'pro', country: 'SE', seats: 5, beta: true };
+
+const DECISION_CASES: DecisionCase[] = [
+  ...[
+    '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+    'b7c6a1e2-0d4f-4a8b-9c3e-5f6a7b8c9d0e',
+    'C0FFEE00-1234-4ABC-8DEF-0123456789AB',
+  ].map((visitorId, index) => ({
+    name: `visitor experiment, visitor ${index + 1}`,
+    input: { key: 'new-checkout', visitorId },
+  })),
+  ...['42', 'customer-42', 'Kund-ÅÄÖ', 'Cust-1', 'cust-1'].map((id) => ({
+    name: `customer-id experiment, customer ${id}`,
+    input: { key: 'pricing-page', id },
+  })),
+  { name: 'targeting match', input: { key: 'pro-banner', visitorId: VISITOR, attributes: PRO_ATTRIBUTES } },
+  ...[2, 4, 6].map((n) => ({
+    name: `weights not summing to 10000, visitor ${n}`,
+    input: { key: 'uneven-weights', visitorId: `00000000-0000-4000-8000-00000000000${n}` },
+  })),
+  { name: 'reason unknown-key', input: { key: 'does-not-exist', visitorId: VISITOR } },
+  {
+    name: 'reason not-running (Deployed returns the deployed variant)',
+    input: { key: 'old-search', visitorId: VISITOR },
+  },
+  { name: 'reason not-running without any ID', input: { key: 'old-search' } },
+  { name: 'reason no-id', input: { key: 'new-checkout' } },
+  { name: 'reason no-id (empty strings)', input: { key: 'new-checkout', visitorId: '', id: '' } },
+  { name: 'reason wrong-id-kind (visitor experiment, customer ID)', input: { key: 'new-checkout', id: 'customer-42' } },
+  {
+    name: 'reason wrong-id-kind (customer experiment, visitor ID)',
+    input: { key: 'pricing-page', visitorId: VISITOR },
+  },
+  {
+    name: 'reason targeting (not in matches US)',
+    input: { key: 'pro-banner', visitorId: VISITOR, attributes: { ...PRO_ATTRIBUTES, country: 'US' } },
+  },
+  {
+    name: 'reason targeting (missing attribute fails not in)',
+    input: { key: 'pro-banner', visitorId: VISITOR, attributes: { plan: 'pro', seats: 5, beta: true } },
+  },
+  {
+    name: 'reason targeting (numeric string is not a number)',
+    input: { key: 'pro-banner', visitorId: VISITOR, attributes: { ...PRO_ATTRIBUTES, seats: '5' } },
+  },
+  { name: 'reason targeting (no attributes)', input: { key: 'pro-banner', visitorId: VISITOR } },
+];
+
+type VariantMapCase = { name: string; input: DecideIdentity };
+
+const VARIANT_MAP_CASES: VariantMapCase[] = [
+  { name: 'visitor ID only', input: { visitorId: VISITOR } },
+  { name: 'visitor ID with matching attributes', input: { visitorId: VISITOR, attributes: PRO_ATTRIBUTES } },
+  { name: 'customer ID only', input: { id: 'customer-42' } },
+  { name: 'customer ID Cust-1 (case-sensitive)', input: { id: 'Cust-1' } },
+  { name: 'customer ID cust-1 (case-sensitive)', input: { id: 'cust-1' } },
+  {
+    name: 'both IDs with matching attributes',
+    input: { visitorId: VISITOR, id: 'customer-42', attributes: PRO_ATTRIBUTES },
+  },
+  { name: 'no ID', input: {} },
+];
+
+async function main(): Promise<void> {
+  if (existsSync(OUT) && !process.argv.includes('--force')) {
+    console.error(`${OUT} exists. Vectors change only with a spec version bump; pass --force if that is what this is.`);
+    process.exit(1);
+  }
+
+  const buckets = [];
+  for (const salt of [SALT_A, SALT_B]) {
+    for (const experimentId of [1, 501, 2147483647]) {
+      for (const id of BUCKET_IDS) {
+        // `message` is the exact string hashed, so a port can tell a case-mapping bug from a hashing bug.
+        const message = `${experimentId}:${id.toLowerCase()}`;
+        buckets.push({ salt, experimentId, id, message, bucket: await bucketFor({ salt, experimentId, id }) });
+      }
+    }
+  }
+
+  const enrolmentIds = [];
+  for (const salt of [SALT_A, SALT_B]) {
+    for (const customerId of ENROLMENT_CUSTOMER_IDS) {
+      enrolmentIds.push({ salt, customerId, enrolmentId: await deriveEnrolmentId({ salt, customerId }) });
+    }
+  }
+
+  const decisions: Array<DecisionCase & { expected: Decision }> = [];
+  for (const { name, input } of DECISION_CASES) {
+    decisions.push({ name, input, expected: await decide({ config: CONFIG, salt: SALT_A, ...input }) });
+  }
+
+  const variantMaps: Array<VariantMapCase & { expected: Record<string, string> }> = [];
+  for (const { name, input } of VARIANT_MAP_CASES) {
+    variantMaps.push({ name, input, expected: await variantMapFor({ config: CONFIG, salt: SALT_A, ...input }) });
+  }
+
+  const file = {
+    specVersion: SDK_CONFIG_VERSION,
+    description:
+      'Test vectors for spec/SPEC.md. buckets and enrolmentIds carry their own salt; decisions and variantMaps all use decisionSalt and decisionConfig.',
+    buckets,
+    enrolmentIds,
+    decisionSalt: SALT_A,
+    decisionConfig: CONFIG,
+    decisions,
+    variantMaps,
+  };
+  writeFileSync(OUT, `${JSON.stringify(file, null, 2)}\n`);
+  console.log(
+    `Wrote ${buckets.length} buckets, ${enrolmentIds.length} enrolment IDs, ${decisions.length} decisions, ${variantMaps.length} variant maps to ${OUT}`,
+  );
+}
+
+await main();

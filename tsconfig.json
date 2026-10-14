@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Strictest",
+  // The strictest options TypeScript offers. This code runs in customers'
+  // Node, Bun, Deno and edge-worker processes, so it may use only the language, fetch and
+  // Web Crypto. No Bun, Node or DOM types are loaded: "webworker" supplies fetch, crypto and
+  // TextEncoder without document or window, and `types: []` keeps @types/* out. Tests are
+  // excluded because they import bun:test; Bun runs them without a typecheck.
+  // Check with: bun run typecheck
+  "compilerOptions": {
+    "strict": true,
+    "strictNullChecks": true,
+    "allowUnusedLabels": false,
+    "allowUnreachableCode": false,
+    "exactOptionalPropertyTypes": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "verbatimModuleSyntax": true,
+
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "lib": ["es2023", "webworker"],
+    "types": [],
+    "module": "esnext",
+    "target": "es2022",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"]
+}

@@ -1,0 +1,51 @@
+{
+  "name": "@pertentoai/sdk",
+  "version": "0.1.0",
+  "description": "Pertento server-side SDK: decide experiment variants on your server and report conversions from your backend.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Pertento/pertento-sdk-js.git"
+  },
+  "homepage": "https://github.com/Pertento/pertento-sdk-js#readme",
+  "bugs": {
+    "url": "https://github.com/Pertento/pertento-sdk-js/issues"
+  },
+  "keywords": [
+    "pertento",
+    "ab-testing",
+    "experiments",
+    "feature-flags",
+    "server-side"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc -p tsconfig.json",
+    "typecheck:consumer": "tsc -p test/consumer/tsconfig.json",
+    "build": "bun scripts/build.ts",
+    "smoke": "node scripts/node-smoke.mjs"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}
