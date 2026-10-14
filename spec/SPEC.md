@@ -71,8 +71,12 @@ mappings and the Final_Sigma rule, so:
 
 Java's `toLowerCase(Locale.ROOT)` and Python's `str.lower()` do this. Go's `strings.ToLower`
 does **not** (it maps code point by code point); a Go port uses
-`golang.org/x/text/cases.Lower(language.Und)`. The vectors include both cases, and each bucket
-vector carries the exact `message`, so a case-mapping bug is told apart from a hashing bug.
+`golang.org/x/text/cases.Lower(language.Und)`. PHP's `strtolower` does **not** either (it is
+byte-wise ASCII only). `mb_strtolower($s, 'UTF-8')` applies the full SpecialCasing mappings
+since PHP 7.3 but the Final_Sigma rule only since PHP 8.3, so a PHP port needs 8.3 or later, or
+must apply Final_Sigma itself. Whatever the language, the requirement is the behaviour above, and
+the vectors are the check: they include both cases, and each bucket vector carries the exact
+`message`, so a case-mapping bug is told apart from a hashing bug.
 
 The modulo bias of `2^32 % 10000` is 7296 values in 2^32, which is negligible.
 
@@ -99,10 +103,15 @@ two independent buckets. The enrolment ID is computed first and is both what the
 
 Input: the experiment's variants and a bucket.
 
-1. Sort the variants by `id` ascending. The config writer already does; a reader MUST sort again.
-   **Control is the variant with the lowest id.**
+1. Drop every entry of `variants` that is not an object (a JSON object: not null, not an array).
+   Sort the rest by `id` ascending. The config writer already does; a reader MUST sort again.
+   The sort MUST be stable: variants with equal ids keep their order in the config (the writer
+   never emits equal ids, so this matters only for hand-edited data, but it fixes which one is
+   control). **Control is the variant with the lowest id.**
 2. A variant's weight is its `weight` if that is a finite number greater than 0, floored to an
-   integer; anything else (negative, zero, NaN, infinite, not a number) is 0.
+   integer; anything else (negative, zero, NaN, infinite, not a number) is 0. The writer emits
+   only integers in `0..10000` (the column is a smallint of basis points); the rule above is for
+   anything else a reader is handed.
 3. `total` = the sum of the weights. If `total` is 0 the pick is **none**.
 4. `point = floor(bucket * total / 10000)`. With the usual total of 10000 this is the bucket.
    A total other than 10000 is scaled, not truncated, so a stored distribution that does not sum
@@ -110,7 +119,8 @@ Input: the experiment's variants and a bucket.
 5. Walk the sorted variants: if `point < weight`, pick this variant; otherwise
    `point -= weight` and continue.
 
-Integer arithmetic is exact here: `bucket * total` stays far below 2^53.
+Integer arithmetic is exact here: `bucket * total` stays far below 2^53 for any total the writer
+can produce (at most 10000 per variant).
 
 ## 6. Decisions
 
@@ -125,24 +135,30 @@ Integer arithmetic is exact here: `bucket * total` stays far below 2^53.
 present on **every** `enrolled: false` and absent on every `enrolled: true`. `enrolAs` is present
 only on an enrolled decision of a `customer_id` experiment.
 
-An ID is **present** only when it is a non-empty string. The checks run in this order; the first
-that applies decides:
+An ID is **present** only when it is a non-empty string. An entry of `config.experiments` that is
+not an object is skipped, as if absent; a malformed config never makes `decide` fail. The checks
+run in this order; the first that applies decides:
 
 | #   | Condition                                                                                                                  | Result                                                                                                                                                                        |
 | --- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | No experiment in `config.experiments` has `key` === the requested key (case-sensitive; first match wins).                  | `experimentId`, `variantId`, `variantKey`, `payload` all `null`; `unknown-key`.                                                                                               |
 | 2   | `status` is not `"Running"`.                                                                                               | `not-running`. For `"Deployed"`, the variant whose `id` is `deployedVariantId`; if that is null or names no variant, control. For any other status, control. No ID is needed. |
-| 3   | The ID `bucketOn` needs is not present (`visitorId` for `visitor`, `id` for `customer_id`), and neither is the other kind. | control; `no-id`.                                                                                                                                                             |
-| 4   | The ID `bucketOn` needs is not present, but the other kind is.                                                             | control; `wrong-id-kind`.                                                                                                                                                     |
-| 5   | The attribute rules (section 7) do not match `attributes`.                                                                 | control; `targeting`.                                                                                                                                                         |
-| 6   | `bucket = bucket(salt, experiment.id, bucketingId)` (section 3); pick (section 5) is none.                                 | control; `not-running` (an experiment that admits nobody behaves as not running; see below).                                                                                  |
-| 7   | Otherwise.                                                                                                                 | the picked variant; `enrolled: true`; for `customer_id`, `enrolAs` = the enrolment ID that was bucketed.                                                                      |
+| 3   | `bucketOn` is neither `"visitor"` nor `"customer_id"`.                                                                     | control; `wrong-id-kind` (no ID the caller can give fits it), whatever IDs are given.                                                                                         |
+| 4   | The ID `bucketOn` needs is not present (`visitorId` for `visitor`, `id` for `customer_id`), and neither is the other kind. | control; `no-id`.                                                                                                                                                             |
+| 5   | The ID `bucketOn` needs is not present, but the other kind is.                                                             | control; `wrong-id-kind`.                                                                                                                                                     |
+| 6   | The attribute rules (section 7) do not match `attributes`.                                                                 | control; `targeting`.                                                                                                                                                         |
+| 7   | `bucket = bucket(salt, experiment.id, bucketingId)` (section 3); pick (section 5) is none.                                 | control; `not-running` (an experiment that admits nobody behaves as not running; see below).                                                                                  |
+| 8   | Otherwise.                                                                                                                 | the picked variant; `enrolled: true`; for `customer_id`, `enrolAs` = the enrolment ID that was bucketed.                                                                      |
 
-For a `customer_id` experiment, step 6 first computes `enrolAs = enrolmentId(salt, id)` from the
+For a `customer_id` experiment, step 7 first computes `enrolAs = enrolmentId(salt, id)` from the
 raw customer ID (section 4), then buckets on `enrolAs`. For a `visitor` experiment it buckets on
 `visitorId`.
 
-Step 6 finding no variant needs every weight to be 0 (or no variants at all). The API refuses to
+Step 3 is deliberately not "treat it as `visitor`": an unknown `bucketOn` comes from a newer writer
+or bad data, and guessing an ID kind could enrol people on an identity the experiment never meant
+to use. Refusing costs an enrolment; guessing could cost a wrong one.
+
+Step 7 finding no variant needs every weight to be 0 (or no variants at all). The API refuses to
 start an experiment whose weights do not sum to 10000, so this happens only with hand-edited
 data; none of the five reasons fits it exactly, and to the caller it is indistinguishable from
 an experiment that is not running.
@@ -153,7 +169,9 @@ at all it is `null`, `null`, `null`. `payload` is passed through as the config h
 When both IDs are given, each experiment uses the one its `bucketOn` names and ignores the other.
 
 `decideAll` is `decide` for every experiment, keyed by flag key (first experiment wins on a
-duplicate key).
+duplicate key). In the reference implementation the result is an object with a null prototype,
+so looking up a key no experiment has (`toString`, `__proto__`) gives `undefined`; a port uses a
+plain map with no inherited entries.
 
 **Variant map** (what a server-reported conversion is attributed with): for every experiment
 whose decision is enrolled, `{ decimal(experimentId): decimal(variantId) }`. Only Running
@@ -163,7 +181,9 @@ not an integer is left out. No ID gives `{}`.
 ## 7. Attribute rules
 
 A rule is `{ attribute: string, operator, value? }`. Rules are ANDed; an empty list matches
-everyone. Matching **never throws**: anything malformed or of the wrong type is a non-match.
+everyone. An experiment whose `targeting` is `null` or absent is treated as an empty list and
+matches everyone (the writer always emits an array; the column is not null). A `targeting` that is
+present but not an array matches nobody. Matching **never throws**: anything malformed or of the wrong type is a non-match.
 
 `attributes` is a flat object. An attribute is **present** when it is an own property (never
 inherited: `toString`, `__proto__` and the like are absent) and its value is neither `null` nor
@@ -242,6 +262,10 @@ without bumping the version in this file. It holds:
 - `buckets`: `{ salt, experimentId, id, message, bucket }`, including uppercase IDs (which must
   bucket like their lowercase form; these exercise `bucket` directly, and a `customer_id` experiment passes it the enrolment ID), multi-byte, `İ` and final-sigma IDs;
 - `enrolmentIds`: `{ salt, customerId, enrolmentId }`;
+- `weightWalks`: `{ name, variants, bucket, expected }`, the variant id section 5 picks (or `null`
+  for none) at chosen buckets: both sides of each boundary of a 70/30 split, in basis points and
+  totalling 100, a total above 10000, and invalid weights. These tell `floor(bucket * total /
+10000)` apart from `bucket % total`;
 - `decisions`: `{ name, input: { key, visitorId?, id?, attributes? }, expected }`, run against
   `decisionConfig` with `decisionSalt`, covering every reason, and `Cust-1` and `cust-1` as two customers with different enrolment IDs and variants;
 - `variantMaps`: `{ name, input, expected }`, same config and salt.

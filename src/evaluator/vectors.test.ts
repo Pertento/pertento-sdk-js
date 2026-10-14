@@ -1,15 +1,17 @@
-import type { DecideIdentity, Decision, SdkConfig } from './types';
+import type { DecideIdentity, Decision, SdkConfig, SdkVariant } from './types';
 import { describe, expect, test } from 'bun:test';
 import rawVectors from '../../spec/vectors.json';
 import { bucketFor } from './bucket';
 import { DECISION_REASONS, SDK_CONFIG_VERSION } from './constants';
 import { decide, variantMapFor } from './decide';
 import { deriveEnrolmentId } from './enrolment-id';
+import { pickByBucket } from './weights';
 
 type VectorFile = {
   specVersion: number;
   buckets: Array<{ salt: string; experimentId: number; id: string; message: string; bucket: number }>;
   enrolmentIds: Array<{ salt: string; customerId: string; enrolmentId: string }>;
+  weightWalks: Array<{ name: string; variants: SdkVariant[]; bucket: number; expected: number | null }>;
   decisionSalt: string;
   decisionConfig: SdkConfig;
   decisions: Array<{ name: string; input: DecideIdentity & { key: string }; expected: Decision }>;
@@ -34,6 +36,15 @@ describe('spec/vectors.json', () => {
 
   test.each(vectors.enrolmentIds)('enrolment ID for $customerId', async ({ salt, customerId, enrolmentId }) => {
     expect(await deriveEnrolmentId({ salt, customerId })).toBe(enrolmentId);
+  });
+
+  test.each(vectors.weightWalks)('weight walk: $name at $bucket', ({ variants, bucket, expected }) => {
+    expect(pickByBucket(variants, bucket)?.id ?? null).toBe(expected);
+  });
+
+  test('every decision vector has a distinct name', () => {
+    const names = vectors.decisions.map(({ name }) => name);
+    expect(new Set(names).size).toBe(names.length);
   });
 
   test.each(vectors.decisions)('decision: $name', async ({ input, expected }) => {
