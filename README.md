@@ -186,8 +186,9 @@ next succeeds.
 
 | Situation | What happens |
 | --- | --- |
-| Config request fails (network, 5xx, 429) | The last good config keeps being used; the next poll tries again. |
-| Server key refused (401) | Polling stops for good; `ready()` rejects. Create a new key and restart. |
+| Config request fails (network, 5xx) | The last good config keeps being used; the next poll tries again. |
+| 503 or 429, with `Retry-After` | The last good config keeps being used; the next request waits as long as `Retry-After` asks (1 second to 5 minutes), even past a poll. The tracking server answers 503 while it starts up. |
+| Server key refused (401) | Retried with backoff (2 seconds, doubling to 30) for 2 minutes, since a key just created takes up to about 30 seconds to become active. Any other answer ends the run. After 2 minutes of nothing but 401s, polling stops for good and `ready()` rejects: check the key, or create a new one and restart. The last good config, if any, keeps being used. |
 | Config of a newer version than this SDK understands | Treated as no config (every key `unknown-key`). Upgrade the package. |
 | Server key belongs to another website than `websiteId` | Treated as no config. Fix the settings. |
 
@@ -267,7 +268,9 @@ numbers. Types are never coerced: `"5"` does not match a rule on the number `5`.
 Every endpoint is on `https://tracking.pertento.ai`, authenticated with
 `Authorization: Bearer psk_live_...`, and rate limited per key. Errors answer
 `{ "error": "message" }` with the status (400 bad body, 401 bad key, 404 no config,
-409 wrong tracking method, 429 too many requests).
+409 wrong tracking method, 429 too many requests, 503 starting up). A key just created can be
+answered 401 for up to about 30 seconds; retry with backoff for a short while before treating it
+as wrong. On 503 or 429, wait as long as `Retry-After` says when it is present.
 
 ### `POST /sdk/decide`
 

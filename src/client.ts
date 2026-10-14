@@ -44,8 +44,10 @@ export type Identity = DecideIdentity;
 export type Pertento = {
   /**
    * Resolves once the first config is loaded. Rejects after `timeoutMs` (default 5000), or at
-   * once if the server key was refused, but the client keeps working and keeps trying either
-   * way: until a config arrives every flag resolves to control with reason `unknown-key`.
+   * once if polling has stopped. The client keeps working either way, and keeps trying unless
+   * polling stopped: until a config arrives every flag resolves to control with reason
+   * `unknown-key`. A refused key (401) is retried for 2 minutes, since a key just created takes
+   * up to about 30 seconds to become active; only then does polling stop for good.
    */
   ready: (timeoutMs?: number) => Promise<void>;
   /**
