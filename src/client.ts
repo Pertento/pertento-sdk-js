@@ -68,8 +68,10 @@ export type Pertento = {
   ) => string;
   /**
    * Reports a conversion from your backend to `POST /sdk/events`. Needs the website's tracking
-   * method set to "Server (SDK)". At most once: no retry, 2 s timeout. Never rejects; check
-   * `ok` on the result, or `lastError`.
+   * method set to "Server (SDK)". `keys` is required: the flag keys this person was decided on
+   * (what you passed to `getVariant` or `getAll`), and `attributes` must be the ones used then.
+   * At most once: no retry, 2 s timeout. Never rejects; missing or invalid `keys` sends nothing
+   * and resolves `ok: false`. Check `ok` on the result, or `lastError`.
    */
   track: (event: string, options: TrackOptions) => Promise<TrackResult>;
   /**
@@ -170,7 +172,7 @@ export function createPertento(options: PertentoOptions): Pertento {
     seedScript,
 
     track: (event, trackOptions) =>
-      sendTrack({ baseUrl, serverKey, fetch, errors, event, options: trackOptions ?? {} }),
+      sendTrack({ baseUrl, serverKey, fetch, errors, event, options: trackOptions }),
 
     get lastError() {
       return errors.last();

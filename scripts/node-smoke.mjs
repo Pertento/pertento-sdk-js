@@ -1,6 +1,6 @@
 // Runs the built package in plain Node, with no Bun and no DOM, against a stubbed fetch:
-// every `decisions` vector through the public API, plus seedScript and track. Exits non-zero
-// on any mismatch. This is what proves dist/ carries no Bun or DOM dependency at runtime.
+// every `decisions` vector through the public API, plus seedScript and track (with and without
+// keys). Exits non-zero on any mismatch. This is what proves dist/ carries no Bun or DOM dependency at runtime.
 //
 //   bun run build && node scripts/node-smoke.mjs
 import { deepStrictEqual, ok, strictEqual } from 'node:assert/strict';
@@ -51,11 +51,26 @@ const all = await pertento.getAll({ visitorId });
 const script = pertento.seedScript(all, visitorId);
 ok(script.startsWith('<script>window.PertentoSeed=') && script.endsWith(';</script>'), 'seedScript shape');
 
-const tracked = await pertento.track('purchase', { visitorId, data: { revenue: 4900 } });
+const keys = Object.keys(all);
+const tracked = await pertento.track('purchase', { keys, visitorId, data: { revenue: 4900 } });
 deepStrictEqual(tracked, { ok: true, experimentVariantMap: { 501: '9002' } });
 const trackRequest = requests.find(({ url }) => url === 'https://tracking.example.test/sdk/events');
-deepStrictEqual(JSON.parse(trackRequest.init.body), { events: [{ name: 'purchase', data: { revenue: 4900 } }], visitorId });
+deepStrictEqual(JSON.parse(trackRequest.init.body), {
+  events: [{ name: 'purchase', data: { revenue: 4900 } }],
+  keys,
+  visitorId,
+});
 strictEqual(pertento.lastError, null);
+
+// Without keys nothing is sent: the result is ok: false and the reason is in lastError.
+const sentBefore = requests.length;
+const originalError = console.error;
+console.error = () => {};
+const refused = await pertento.track('purchase', { visitorId });
+console.error = originalError;
+strictEqual(refused.ok, false);
+strictEqual(requests.length, sentBefore);
+strictEqual(pertento.lastError?.kind, 'bad-request');
 pertento.close();
 
 if (failures > 0) {
