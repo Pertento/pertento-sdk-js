@@ -1,0 +1,16 @@
+{
+  // A strict customer project on nodenext, which needs explicit extensions in every
+  // declaration import. Only lib.dom stands in for the runtime's fetch and AbortSignal types.
+  "compilerOptions": {
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noEmit": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "es2022",
+    "lib": ["es2023", "dom"],
+    "types": [],
+    "skipLibCheck": false
+  },
+  "files": ["use.ts"]
+}
