@@ -1,0 +1,11 @@
+{
+  // Declarations only; Bun.build writes the JavaScript (scripts/build.ts).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  }
+}

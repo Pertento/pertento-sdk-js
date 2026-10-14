@@ -1,0 +1,1211 @@
+{
+  "specVersion": 1,
+  "description": "Test vectors for spec/SPEC.md. buckets and enrolmentIds carry their own salt; decisions and variantMaps all use decisionSalt and decisionConfig.",
+  "buckets": [
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 1,
+      "id": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "message": "1:3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "bucket": 3331
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 1,
+      "id": "3F2504E0-4F89-41D3-9A0C-0305E82C3301",
+      "message": "1:3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "bucket": 3331
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 1,
+      "id": "b7c6a1e2-0d4f-4a8b-9c3e-5f6a7b8c9d0e",
+      "message": "1:b7c6a1e2-0d4f-4a8b-9c3e-5f6a7b8c9d0e",
+      "bucket": 4066
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 1,
+      "id": "customer-42",
+      "message": "1:customer-42",
+      "bucket": 7339
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 1,
+      "id": "Customer-42",
+      "message": "1:customer-42",
+      "bucket": 7339
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 1,
+      "id": "42",
+      "message": "1:42",
+      "bucket": 6447
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 1,
+      "id": "jane.doe@example.com",
+      "message": "1:jane.doe@example.com",
+      "bucket": 1819
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 1,
+      "id": "Kund-ÅÄÖ",
+      "message": "1:kund-åäö",
+      "bucket": 6877
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 1,
+      "id": "顧客-7",
+      "message": "1:顧客-7",
+      "bucket": 7743
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 1,
+      "id": "🙂user",
+      "message": "1:🙂user",
+      "bucket": 4960
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 1,
+      "id": "İstanbul",
+      "message": "1:i̇stanbul",
+      "bucket": 9006
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 1,
+      "id": "ΟΔΟΣ",
+      "message": "1:οδος",
+      "bucket": 7046
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 501,
+      "id": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "message": "501:3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "bucket": 9773
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 501,
+      "id": "3F2504E0-4F89-41D3-9A0C-0305E82C3301",
+      "message": "501:3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "bucket": 9773
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 501,
+      "id": "b7c6a1e2-0d4f-4a8b-9c3e-5f6a7b8c9d0e",
+      "message": "501:b7c6a1e2-0d4f-4a8b-9c3e-5f6a7b8c9d0e",
+      "bucket": 7855
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 501,
+      "id": "customer-42",
+      "message": "501:customer-42",
+      "bucket": 7709
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 501,
+      "id": "Customer-42",
+      "message": "501:customer-42",
+      "bucket": 7709
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 501,
+      "id": "42",
+      "message": "501:42",
+      "bucket": 7693
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 501,
+      "id": "jane.doe@example.com",
+      "message": "501:jane.doe@example.com",
+      "bucket": 9511
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 501,
+      "id": "Kund-ÅÄÖ",
+      "message": "501:kund-åäö",
+      "bucket": 963
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 501,
+      "id": "顧客-7",
+      "message": "501:顧客-7",
+      "bucket": 2621
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 501,
+      "id": "🙂user",
+      "message": "501:🙂user",
+      "bucket": 9255
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 501,
+      "id": "İstanbul",
+      "message": "501:i̇stanbul",
+      "bucket": 1592
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 501,
+      "id": "ΟΔΟΣ",
+      "message": "501:οδος",
+      "bucket": 1112
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 2147483647,
+      "id": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "message": "2147483647:3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "bucket": 3191
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 2147483647,
+      "id": "3F2504E0-4F89-41D3-9A0C-0305E82C3301",
+      "message": "2147483647:3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "bucket": 3191
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 2147483647,
+      "id": "b7c6a1e2-0d4f-4a8b-9c3e-5f6a7b8c9d0e",
+      "message": "2147483647:b7c6a1e2-0d4f-4a8b-9c3e-5f6a7b8c9d0e",
+      "bucket": 701
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 2147483647,
+      "id": "customer-42",
+      "message": "2147483647:customer-42",
+      "bucket": 618
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 2147483647,
+      "id": "Customer-42",
+      "message": "2147483647:customer-42",
+      "bucket": 618
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 2147483647,
+      "id": "42",
+      "message": "2147483647:42",
+      "bucket": 6308
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 2147483647,
+      "id": "jane.doe@example.com",
+      "message": "2147483647:jane.doe@example.com",
+      "bucket": 3428
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 2147483647,
+      "id": "Kund-ÅÄÖ",
+      "message": "2147483647:kund-åäö",
+      "bucket": 7986
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 2147483647,
+      "id": "顧客-7",
+      "message": "2147483647:顧客-7",
+      "bucket": 9513
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 2147483647,
+      "id": "🙂user",
+      "message": "2147483647:🙂user",
+      "bucket": 1417
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 2147483647,
+      "id": "İstanbul",
+      "message": "2147483647:i̇stanbul",
+      "bucket": 1682
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "experimentId": 2147483647,
+      "id": "ΟΔΟΣ",
+      "message": "2147483647:οδος",
+      "bucket": 9055
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 1,
+      "id": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "message": "1:3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "bucket": 1621
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 1,
+      "id": "3F2504E0-4F89-41D3-9A0C-0305E82C3301",
+      "message": "1:3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "bucket": 1621
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 1,
+      "id": "b7c6a1e2-0d4f-4a8b-9c3e-5f6a7b8c9d0e",
+      "message": "1:b7c6a1e2-0d4f-4a8b-9c3e-5f6a7b8c9d0e",
+      "bucket": 1132
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 1,
+      "id": "customer-42",
+      "message": "1:customer-42",
+      "bucket": 4985
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 1,
+      "id": "Customer-42",
+      "message": "1:customer-42",
+      "bucket": 4985
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 1,
+      "id": "42",
+      "message": "1:42",
+      "bucket": 906
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 1,
+      "id": "jane.doe@example.com",
+      "message": "1:jane.doe@example.com",
+      "bucket": 1641
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 1,
+      "id": "Kund-ÅÄÖ",
+      "message": "1:kund-åäö",
+      "bucket": 6272
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 1,
+      "id": "顧客-7",
+      "message": "1:顧客-7",
+      "bucket": 1173
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 1,
+      "id": "🙂user",
+      "message": "1:🙂user",
+      "bucket": 5899
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 1,
+      "id": "İstanbul",
+      "message": "1:i̇stanbul",
+      "bucket": 3874
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 1,
+      "id": "ΟΔΟΣ",
+      "message": "1:οδος",
+      "bucket": 8760
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 501,
+      "id": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "message": "501:3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "bucket": 3286
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 501,
+      "id": "3F2504E0-4F89-41D3-9A0C-0305E82C3301",
+      "message": "501:3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "bucket": 3286
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 501,
+      "id": "b7c6a1e2-0d4f-4a8b-9c3e-5f6a7b8c9d0e",
+      "message": "501:b7c6a1e2-0d4f-4a8b-9c3e-5f6a7b8c9d0e",
+      "bucket": 948
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 501,
+      "id": "customer-42",
+      "message": "501:customer-42",
+      "bucket": 2084
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 501,
+      "id": "Customer-42",
+      "message": "501:customer-42",
+      "bucket": 2084
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 501,
+      "id": "42",
+      "message": "501:42",
+      "bucket": 4943
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 501,
+      "id": "jane.doe@example.com",
+      "message": "501:jane.doe@example.com",
+      "bucket": 3835
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 501,
+      "id": "Kund-ÅÄÖ",
+      "message": "501:kund-åäö",
+      "bucket": 5860
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 501,
+      "id": "顧客-7",
+      "message": "501:顧客-7",
+      "bucket": 3463
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 501,
+      "id": "🙂user",
+      "message": "501:🙂user",
+      "bucket": 2311
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 501,
+      "id": "İstanbul",
+      "message": "501:i̇stanbul",
+      "bucket": 9664
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 501,
+      "id": "ΟΔΟΣ",
+      "message": "501:οδος",
+      "bucket": 9253
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 2147483647,
+      "id": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "message": "2147483647:3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "bucket": 5201
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 2147483647,
+      "id": "3F2504E0-4F89-41D3-9A0C-0305E82C3301",
+      "message": "2147483647:3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "bucket": 5201
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 2147483647,
+      "id": "b7c6a1e2-0d4f-4a8b-9c3e-5f6a7b8c9d0e",
+      "message": "2147483647:b7c6a1e2-0d4f-4a8b-9c3e-5f6a7b8c9d0e",
+      "bucket": 7305
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 2147483647,
+      "id": "customer-42",
+      "message": "2147483647:customer-42",
+      "bucket": 804
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 2147483647,
+      "id": "Customer-42",
+      "message": "2147483647:customer-42",
+      "bucket": 804
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 2147483647,
+      "id": "42",
+      "message": "2147483647:42",
+      "bucket": 3887
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 2147483647,
+      "id": "jane.doe@example.com",
+      "message": "2147483647:jane.doe@example.com",
+      "bucket": 169
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 2147483647,
+      "id": "Kund-ÅÄÖ",
+      "message": "2147483647:kund-åäö",
+      "bucket": 5162
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 2147483647,
+      "id": "顧客-7",
+      "message": "2147483647:顧客-7",
+      "bucket": 6460
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 2147483647,
+      "id": "🙂user",
+      "message": "2147483647:🙂user",
+      "bucket": 6109
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 2147483647,
+      "id": "İstanbul",
+      "message": "2147483647:i̇stanbul",
+      "bucket": 1444
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "experimentId": 2147483647,
+      "id": "ΟΔΟΣ",
+      "message": "2147483647:οδος",
+      "bucket": 8109
+    }
+  ],
+  "enrolmentIds": [
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "customerId": "42",
+      "enrolmentId": "772070d0-501b-80dc-a7b4-0dc37d06a742"
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "customerId": "customer-42",
+      "enrolmentId": "f6e3bf31-046a-89dd-83d2-c7fc14392b0c"
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "customerId": "Customer-42",
+      "enrolmentId": "f2af8ce9-665e-8965-b54f-a0ce7d5616a2"
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "customerId": "jane.doe@example.com",
+      "enrolmentId": "c525d9c4-2f9b-8694-84f7-3b896af42895"
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "customerId": "Kund-ÅÄÖ",
+      "enrolmentId": "d2cf590c-d77d-8f00-aa99-190abe405f7c"
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "customerId": "顧客-7",
+      "enrolmentId": "0e3d104f-a80b-80b1-9ead-3f99e675b412"
+    },
+    {
+      "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+      "customerId": "🙂user",
+      "enrolmentId": "8b99bd11-7e22-87dd-ba1b-575d199f2fac"
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "customerId": "42",
+      "enrolmentId": "7e02ecd7-48db-8055-beab-f40684baa0d8"
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "customerId": "customer-42",
+      "enrolmentId": "6476f32c-0a83-8250-841d-daa8920d99a7"
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "customerId": "Customer-42",
+      "enrolmentId": "706d8ee9-3629-84b6-ad0b-bc0e11c0c2a5"
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "customerId": "jane.doe@example.com",
+      "enrolmentId": "562450af-d0a3-83f5-8ca3-e5416ca59d4e"
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "customerId": "Kund-ÅÄÖ",
+      "enrolmentId": "a478d0ac-317e-8bbb-ba56-379abd6bb0ab"
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "customerId": "顧客-7",
+      "enrolmentId": "2068361a-0371-8bc6-853c-78a62f89bea8"
+    },
+    {
+      "salt": "00ff10ee20dd30cc40bb50aa60997088",
+      "customerId": "🙂user",
+      "enrolmentId": "55dcc59c-eb20-87e4-8240-f65fcaaf7b4e"
+    }
+  ],
+  "decisionSalt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
+  "decisionConfig": {
+    "version": 1,
+    "websiteId": 77,
+    "generatedAt": 1760400000000,
+    "trackingMethod": "server",
+    "experiments": [
+      {
+        "id": 501,
+        "key": "new-checkout",
+        "status": "Running",
+        "bucketOn": "visitor",
+        "variants": [
+          {
+            "id": 9001,
+            "key": "control",
+            "weight": 5000,
+            "payload": {
+              "layout": "classic"
+            }
+          },
+          {
+            "id": 9002,
+            "key": "one-page",
+            "weight": 5000,
+            "payload": {
+              "layout": "single",
+              "steps": 1
+            }
+          }
+        ],
+        "deployedVariantId": null,
+        "targeting": []
+      },
+      {
+        "id": 502,
+        "key": "pricing-page",
+        "status": "Running",
+        "bucketOn": "customer_id",
+        "variants": [
+          {
+            "id": 9011,
+            "key": "control",
+            "weight": 3334,
+            "payload": null
+          },
+          {
+            "id": 9012,
+            "key": "annual-first",
+            "weight": 3333,
+            "payload": {
+              "default": "annual"
+            }
+          },
+          {
+            "id": 9013,
+            "key": "monthly-first",
+            "weight": 3333,
+            "payload": {
+              "default": "monthly"
+            }
+          }
+        ],
+        "deployedVariantId": null,
+        "targeting": []
+      },
+      {
+        "id": 503,
+        "key": "pro-banner",
+        "status": "Running",
+        "bucketOn": "visitor",
+        "variants": [
+          {
+            "id": 9021,
+            "key": "off",
+            "weight": 2000,
+            "payload": false
+          },
+          {
+            "id": 9022,
+            "key": "on",
+            "weight": 8000,
+            "payload": true
+          }
+        ],
+        "deployedVariantId": null,
+        "targeting": [
+          {
+            "attribute": "plan",
+            "operator": "in",
+            "value": [
+              "pro",
+              "business"
+            ]
+          },
+          {
+            "attribute": "country",
+            "operator": "not in",
+            "value": [
+              "US"
+            ]
+          },
+          {
+            "attribute": "seats",
+            "operator": ">",
+            "value": 1
+          },
+          {
+            "attribute": "beta",
+            "operator": "exists"
+          }
+        ]
+      },
+      {
+        "id": 504,
+        "key": "old-search",
+        "status": "Deployed",
+        "bucketOn": "visitor",
+        "variants": [
+          {
+            "id": 9031,
+            "key": "control",
+            "weight": 5000,
+            "payload": "v1"
+          },
+          {
+            "id": 9032,
+            "key": "fuzzy",
+            "weight": 5000,
+            "payload": "v2"
+          },
+          {
+            "id": 9033,
+            "key": "fuzzy",
+            "weight": 0,
+            "payload": "v2"
+          }
+        ],
+        "deployedVariantId": 9033,
+        "targeting": []
+      },
+      {
+        "id": 505,
+        "key": "uneven-weights",
+        "status": "Running",
+        "bucketOn": "visitor",
+        "variants": [
+          {
+            "id": 9042,
+            "key": "b",
+            "weight": 30,
+            "payload": null
+          },
+          {
+            "id": 9041,
+            "key": "a",
+            "weight": 70,
+            "payload": null
+          }
+        ],
+        "deployedVariantId": null,
+        "targeting": []
+      }
+    ]
+  },
+  "decisions": [
+    {
+      "name": "visitor experiment, visitor 1",
+      "input": {
+        "key": "new-checkout",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
+      },
+      "expected": {
+        "experimentId": 501,
+        "variantId": 9002,
+        "variantKey": "one-page",
+        "payload": {
+          "layout": "single",
+          "steps": 1
+        },
+        "enrolled": true
+      }
+    },
+    {
+      "name": "visitor experiment, visitor 2",
+      "input": {
+        "key": "new-checkout",
+        "visitorId": "b7c6a1e2-0d4f-4a8b-9c3e-5f6a7b8c9d0e"
+      },
+      "expected": {
+        "experimentId": 501,
+        "variantId": 9002,
+        "variantKey": "one-page",
+        "payload": {
+          "layout": "single",
+          "steps": 1
+        },
+        "enrolled": true
+      }
+    },
+    {
+      "name": "visitor experiment, visitor 3",
+      "input": {
+        "key": "new-checkout",
+        "visitorId": "C0FFEE00-1234-4ABC-8DEF-0123456789AB"
+      },
+      "expected": {
+        "experimentId": 501,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": true
+      }
+    },
+    {
+      "name": "customer-id experiment, customer 42",
+      "input": {
+        "key": "pricing-page",
+        "id": "42"
+      },
+      "expected": {
+        "experimentId": 502,
+        "variantId": 9013,
+        "variantKey": "monthly-first",
+        "payload": {
+          "default": "monthly"
+        },
+        "enrolled": true,
+        "enrolAs": "772070d0-501b-80dc-a7b4-0dc37d06a742"
+      }
+    },
+    {
+      "name": "customer-id experiment, customer customer-42",
+      "input": {
+        "key": "pricing-page",
+        "id": "customer-42"
+      },
+      "expected": {
+        "experimentId": 502,
+        "variantId": 9012,
+        "variantKey": "annual-first",
+        "payload": {
+          "default": "annual"
+        },
+        "enrolled": true,
+        "enrolAs": "f6e3bf31-046a-89dd-83d2-c7fc14392b0c"
+      }
+    },
+    {
+      "name": "customer-id experiment, customer Kund-ÅÄÖ",
+      "input": {
+        "key": "pricing-page",
+        "id": "Kund-ÅÄÖ"
+      },
+      "expected": {
+        "experimentId": 502,
+        "variantId": 9013,
+        "variantKey": "monthly-first",
+        "payload": {
+          "default": "monthly"
+        },
+        "enrolled": true,
+        "enrolAs": "d2cf590c-d77d-8f00-aa99-190abe405f7c"
+      }
+    },
+    {
+      "name": "customer-id experiment, customer Cust-1",
+      "input": {
+        "key": "pricing-page",
+        "id": "Cust-1"
+      },
+      "expected": {
+        "experimentId": 502,
+        "variantId": 9013,
+        "variantKey": "monthly-first",
+        "payload": {
+          "default": "monthly"
+        },
+        "enrolled": true,
+        "enrolAs": "86ad6191-84de-8bdb-98b2-23a9733c4227"
+      }
+    },
+    {
+      "name": "customer-id experiment, customer cust-1",
+      "input": {
+        "key": "pricing-page",
+        "id": "cust-1"
+      },
+      "expected": {
+        "experimentId": 502,
+        "variantId": 9011,
+        "variantKey": "control",
+        "payload": null,
+        "enrolled": true,
+        "enrolAs": "4fc20be8-d216-864e-a038-abb7be5a6c85"
+      }
+    },
+    {
+      "name": "targeting match",
+      "input": {
+        "key": "pro-banner",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "plan": "pro",
+          "country": "SE",
+          "seats": 5,
+          "beta": true
+        }
+      },
+      "expected": {
+        "experimentId": 503,
+        "variantId": 9022,
+        "variantKey": "on",
+        "payload": true,
+        "enrolled": true
+      }
+    },
+    {
+      "name": "weights not summing to 10000, visitor 2",
+      "input": {
+        "key": "uneven-weights",
+        "visitorId": "00000000-0000-4000-8000-000000000002"
+      },
+      "expected": {
+        "experimentId": 505,
+        "variantId": 9042,
+        "variantKey": "b",
+        "payload": null,
+        "enrolled": true
+      }
+    },
+    {
+      "name": "weights not summing to 10000, visitor 4",
+      "input": {
+        "key": "uneven-weights",
+        "visitorId": "00000000-0000-4000-8000-000000000004"
+      },
+      "expected": {
+        "experimentId": 505,
+        "variantId": 9042,
+        "variantKey": "b",
+        "payload": null,
+        "enrolled": true
+      }
+    },
+    {
+      "name": "weights not summing to 10000, visitor 6",
+      "input": {
+        "key": "uneven-weights",
+        "visitorId": "00000000-0000-4000-8000-000000000006"
+      },
+      "expected": {
+        "experimentId": 505,
+        "variantId": 9041,
+        "variantKey": "a",
+        "payload": null,
+        "enrolled": true
+      }
+    },
+    {
+      "name": "reason unknown-key",
+      "input": {
+        "key": "does-not-exist",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
+      },
+      "expected": {
+        "experimentId": null,
+        "variantId": null,
+        "variantKey": null,
+        "payload": null,
+        "enrolled": false,
+        "reason": "unknown-key"
+      }
+    },
+    {
+      "name": "reason not-running (Deployed returns the deployed variant)",
+      "input": {
+        "key": "old-search",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
+      },
+      "expected": {
+        "experimentId": 504,
+        "variantId": 9033,
+        "variantKey": "fuzzy",
+        "payload": "v2",
+        "enrolled": false,
+        "reason": "not-running"
+      }
+    },
+    {
+      "name": "reason not-running without any ID",
+      "input": {
+        "key": "old-search"
+      },
+      "expected": {
+        "experimentId": 504,
+        "variantId": 9033,
+        "variantKey": "fuzzy",
+        "payload": "v2",
+        "enrolled": false,
+        "reason": "not-running"
+      }
+    },
+    {
+      "name": "reason no-id",
+      "input": {
+        "key": "new-checkout"
+      },
+      "expected": {
+        "experimentId": 501,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": false,
+        "reason": "no-id"
+      }
+    },
+    {
+      "name": "reason no-id (empty strings)",
+      "input": {
+        "key": "new-checkout",
+        "visitorId": "",
+        "id": ""
+      },
+      "expected": {
+        "experimentId": 501,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": false,
+        "reason": "no-id"
+      }
+    },
+    {
+      "name": "reason wrong-id-kind (visitor experiment, customer ID)",
+      "input": {
+        "key": "new-checkout",
+        "id": "customer-42"
+      },
+      "expected": {
+        "experimentId": 501,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": false,
+        "reason": "wrong-id-kind"
+      }
+    },
+    {
+      "name": "reason wrong-id-kind (customer experiment, visitor ID)",
+      "input": {
+        "key": "pricing-page",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
+      },
+      "expected": {
+        "experimentId": 502,
+        "variantId": 9011,
+        "variantKey": "control",
+        "payload": null,
+        "enrolled": false,
+        "reason": "wrong-id-kind"
+      }
+    },
+    {
+      "name": "reason targeting (not in matches US)",
+      "input": {
+        "key": "pro-banner",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "plan": "pro",
+          "country": "US",
+          "seats": 5,
+          "beta": true
+        }
+      },
+      "expected": {
+        "experimentId": 503,
+        "variantId": 9021,
+        "variantKey": "off",
+        "payload": false,
+        "enrolled": false,
+        "reason": "targeting"
+      }
+    },
+    {
+      "name": "reason targeting (missing attribute fails not in)",
+      "input": {
+        "key": "pro-banner",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "plan": "pro",
+          "seats": 5,
+          "beta": true
+        }
+      },
+      "expected": {
+        "experimentId": 503,
+        "variantId": 9021,
+        "variantKey": "off",
+        "payload": false,
+        "enrolled": false,
+        "reason": "targeting"
+      }
+    },
+    {
+      "name": "reason targeting (numeric string is not a number)",
+      "input": {
+        "key": "pro-banner",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "plan": "pro",
+          "country": "SE",
+          "seats": "5",
+          "beta": true
+        }
+      },
+      "expected": {
+        "experimentId": 503,
+        "variantId": 9021,
+        "variantKey": "off",
+        "payload": false,
+        "enrolled": false,
+        "reason": "targeting"
+      }
+    },
+    {
+      "name": "reason targeting (no attributes)",
+      "input": {
+        "key": "pro-banner",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
+      },
+      "expected": {
+        "experimentId": 503,
+        "variantId": 9021,
+        "variantKey": "off",
+        "payload": false,
+        "enrolled": false,
+        "reason": "targeting"
+      }
+    }
+  ],
+  "variantMaps": [
+    {
+      "name": "visitor ID only",
+      "input": {
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
+      },
+      "expected": {
+        "501": "9002",
+        "505": "9041"
+      }
+    },
+    {
+      "name": "visitor ID with matching attributes",
+      "input": {
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "plan": "pro",
+          "country": "SE",
+          "seats": 5,
+          "beta": true
+        }
+      },
+      "expected": {
+        "501": "9002",
+        "503": "9022",
+        "505": "9041"
+      }
+    },
+    {
+      "name": "customer ID only",
+      "input": {
+        "id": "customer-42"
+      },
+      "expected": {
+        "502": "9012"
+      }
+    },
+    {
+      "name": "customer ID Cust-1 (case-sensitive)",
+      "input": {
+        "id": "Cust-1"
+      },
+      "expected": {
+        "502": "9013"
+      }
+    },
+    {
+      "name": "customer ID cust-1 (case-sensitive)",
+      "input": {
+        "id": "cust-1"
+      },
+      "expected": {
+        "502": "9011"
+      }
+    },
+    {
+      "name": "both IDs with matching attributes",
+      "input": {
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "id": "customer-42",
+        "attributes": {
+          "plan": "pro",
+          "country": "SE",
+          "seats": 5,
+          "beta": true
+        }
+      },
+      "expected": {
+        "501": "9002",
+        "502": "9012",
+        "503": "9022",
+        "505": "9041"
+      }
+    },
+    {
+      "name": "no ID",
+      "input": {},
+      "expected": {}
+    }
+  ]
+}
