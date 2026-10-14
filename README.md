@@ -40,6 +40,13 @@ const pertento = createPertento({
 await pertento.ready(); // optional: waits up to 5 s for the first config
 ```
 
+> **Required: persist the visitor ID and send it back.** Pertento sets no cookies, so your
+> server has to remember who the visitor is. Store the visitor ID the first time you mint it
+> (in your session, or a first-party cookie you set) and pass the same ID on every later request
+> for that person. A request without it is a new visitor: they are bucketed afresh on every page
+> and their conversions land on unrelated variants. See
+> [Carrying the visitor ID](#carrying-the-visitor-id).
+
 On each request:
 
 ```ts
@@ -131,7 +138,13 @@ The same customer then gets the same variant on every device. Things to know:
 - **IDs are opaque and case-sensitive.** `Cust-1` and `cust-1` are two different people. Pass
   exactly the same string every time; do not trim, lowercase or reformat it.
 - **Pertento never stores your customer ID.** It derives a random-looking enrolment ID from it
-  with the website's secret salt (`decision.enrolAs`), and enrols and counts that.
+  with the website's secret salt (`decision.enrolAs`), and enrols and counts that. The
+  enrolment ID is still pseudonymous data, not anonymous: anyone holding the salt can compute
+  it from a customer ID and link the two.
+- **Use opaque customer IDs.** A server key also gives access to the website's bucketing salt
+  (`GET /sdk/config` returns it), so whoever holds the key can derive the enrolment ID of any
+  customer ID they can guess. Prefer IDs that are not sequential or guessable (a UUID, or a
+  keyed hash of your internal ID) over `1`, `2`, `3`, and guard the key like a password.
 - **Visitor counts are not comparable across ID kinds.** A customer-ID experiment counts
   customers; a visitor experiment counts browsers. Compare arms within an experiment, not totals
   between experiments of different kinds.
