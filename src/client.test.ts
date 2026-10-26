@@ -228,7 +228,7 @@ describe('refresh', () => {
   });
 
   test('refuses a config version it does not understand, as no config', async () => {
-    const { fetch } = fakeFetch(configReply(), configReply({ version: 2 }, '"v2"'));
+    const { fetch } = fakeFetch(configReply(), configReply({ version: 3 }, '"v3"'));
     const pertento = client(fetch, { background: false });
     await pertento.ready();
 
@@ -240,6 +240,17 @@ describe('refresh', () => {
     expect(await pertento.getAll({ visitorId: VISITOR })).toEqual({});
     expect(pertento.lastError).toMatchObject({ kind: 'unsupported-version' });
     expect(consoleError).toHaveBeenCalledTimes(1);
+  });
+
+  test('reads config versions 1 and 2 alike', async () => {
+    for (const version of [1, 2]) {
+      const { fetch } = fakeFetch(configReply({ version }));
+      const pertento = client(fetch, { background: false });
+      expect(await pertento.ready()).toBe(true);
+      expect(await pertento.getVariant('new-checkout', { visitorId: VISITOR })).toMatchObject({ experimentId: 501 });
+      expect(pertento.lastError).toBeNull();
+      pertento.close();
+    }
   });
 
   test("refuses another website's config", async () => {

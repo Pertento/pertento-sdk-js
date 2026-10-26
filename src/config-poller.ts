@@ -1,7 +1,7 @@
 import type { SdkConfig } from './evaluator';
 import type { ErrorReporter, PertentoErrorKind } from './errors';
 import type { FetchLike, FetchResponse } from './http';
-import { SDK_CONFIG_VERSION } from './evaluator';
+import { isSupportedConfigVersion, SUPPORTED_CONFIG_VERSIONS } from './evaluator';
 import { isPlainObject, kindForStatus, serverMessage, thrownFetchError, timedFetch } from './http';
 
 /** A config the SDK accepted, with the salt the evaluator needs. */
@@ -49,10 +49,11 @@ export function parseConfigBody(body: unknown, websiteId: number): ParsedConfig 
   if (!isPlainObject(body)) return refused('invalid-config', 'The config response is not a JSON object');
 
   const { version, salt, experiments } = body;
-  if (version !== SDK_CONFIG_VERSION) {
+  // Version 1 is version 2 without any rollout, so both are read (spec/SPEC.md, "Config").
+  if (!isSupportedConfigVersion(version)) {
     return refused(
       'unsupported-version',
-      `The config is version ${String(version)}, and this SDK understands version ${SDK_CONFIG_VERSION}. ` +
+      `The config is version ${String(version)}, and this SDK understands versions ${SUPPORTED_CONFIG_VERSIONS.join(' and ')}. ` +
         'Every flag resolves to control (reason unknown-key) until @pertentoai/sdk is upgraded.',
     );
   }

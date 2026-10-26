@@ -1,6 +1,6 @@
 {
   "name": "@pertentoai/sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Pertento server-side SDK: decide experiment variants on your server and report conversions from your backend.",
   "license": "MIT",
   "type": "module",

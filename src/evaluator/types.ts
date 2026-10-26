@@ -2,7 +2,7 @@ import type {
   ATTRIBUTE_RULE_OPERATORS,
   DECISION_REASONS,
   EXPERIMENT_BUCKET_ON,
-  SDK_CONFIG_VERSION,
+  SUPPORTED_CONFIG_VERSIONS,
   TRACKING_METHODS,
 } from './constants';
 
@@ -10,6 +10,7 @@ export type AttributeRuleOperator = (typeof ATTRIBUTE_RULE_OPERATORS)[number];
 export type BucketOn = (typeof EXPERIMENT_BUCKET_ON)[number];
 export type TrackingMethod = (typeof TRACKING_METHODS)[number];
 export type DecisionReason = (typeof DECISION_REASONS)[number];
+export type SdkConfigVersion = (typeof SUPPORTED_CONFIG_VERSIONS)[number];
 
 /** Same shape as `AttributeRule` in pertentodb/types. `value` is absent for 'exists'. */
 export type AttributeRule = {
@@ -29,6 +30,31 @@ export type SdkVariant = {
   payload: unknown;
 };
 
+/**
+ * A ring: people who get one side of a flag by rule rather than by bucket. It matches when
+ * every rule matches the attributes and, when `ids` is set, the person's ID is in it.
+ */
+export type SdkRing = {
+  rules: AttributeRule[];
+  ids?: string[];
+  serve: 'on' | 'off';
+};
+
+/**
+ * Makes an experiment a feature flag decided by sticky rollout instead of the weight walk:
+ * On when the bucket is below min(rolloutBp, 10000 - holdbackBp). See spec/SPEC.md, "Rollouts".
+ */
+export type SdkRollout = {
+  /** The On variant. Off is the experiment's other variant. */
+  onVariantId: number;
+  /** Basis points of buckets that are On, 0..10000. Raising it only adds people. */
+  rolloutBp: number;
+  /** Basis points at the top of the bucket range that are always Off, 0..10000. */
+  holdbackBp: number;
+  /** Evaluated in order before the bucket; the first that matches decides. */
+  rings: SdkRing[];
+};
+
 export type SdkExperiment = {
   id: number;
   /** The flag key the customer's code asks for. */
@@ -39,10 +65,13 @@ export type SdkExperiment = {
   variants: SdkVariant[];
   deployedVariantId: number | null;
   targeting: AttributeRule[];
+  /** Present only on a feature flag (exactly two variants, Off and On). */
+  rollout?: SdkRollout;
 };
 
 export type SdkConfig = {
-  version: typeof SDK_CONFIG_VERSION;
+  /** 1 unless an experiment has a rollout (configVersionFor). */
+  version: SdkConfigVersion;
   websiteId: number;
   generatedAt: number;
   trackingMethod: TrackingMethod | null;
