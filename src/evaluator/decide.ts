@@ -1,4 +1,5 @@
 import type {
+  BucketOn,
   DecideIdentity,
   DecideInput,
   Decision,
@@ -10,23 +11,26 @@ import type {
   SdkVariant,
 } from './types';
 import { bucketFor } from './bucket';
+import { EXPERIMENT_BUCKET_ON } from './constants';
 import { deriveEnrolmentId } from './enrolment-id';
 import { matchAttributeRules } from './targeting';
-import { pickByBucket, sortById } from './weights';
+import { isObject, pickByBucket, sortById } from './weights';
 
 type DecideExperimentParams = DecideIdentity & { experiment: Readonly<SdkExperiment>; salt: string };
 
 /**
- * The variant one flag key resolves to for one person. Never throws on bad data; the
- * only rejection is Web Crypto itself failing. Checks run in a fixed order, and the
- * first that fails is the reason (spec/SPEC.md, "Decisions"):
+ * The variant one flag key resolves to for one person. Never throws on bad data, a
+ * malformed config included (entries that are not objects are skipped); the only
+ * rejection is Web Crypto itself failing. Checks run in a fixed order, and the first
+ * that fails is the reason (spec/SPEC.md, "Decisions"):
  *
  * 1. no experiment has the key                   → 'unknown-key', everything null
- * 2. the experiment is not Running               → 'not-running'; Deployed returns the deployed variant
- * 3. no ID at all                                 → 'no-id', control
- * 4. only the other kind of ID than bucketOn      → 'wrong-id-kind', control
- * 5. the attribute rules do not match             → 'targeting', control
- * 6. otherwise                                    → enrolled in the variant the bucket falls in
+ * 2. the experiment is not Running               → 'not-running'; only Deployed returns the deployed variant
+ * 3. bucketOn is not a value this evaluator knows → 'wrong-id-kind', control
+ * 4. no ID at all                                 → 'no-id', control
+ * 5. only the other kind of ID than bucketOn      → 'wrong-id-kind', control
+ * 6. the attribute rules do not match             → 'targeting', control
+ * 7. otherwise                                    → enrolled in the variant the bucket falls in
  */
 export async function decide({ config, salt, key, ...identity }: DecideInput): Promise<Decision> {
   const experiment = findExperiment(config, key);
@@ -45,13 +49,21 @@ export async function decide({ config, salt, key, ...identity }: DecideInput): P
 
 export type DecideAllParams = DecideIdentity & { config: Readonly<SdkConfig>; salt: string };
 
-/** `decide` for every experiment in the config, keyed by flag key. */
+/**
+ * `decide` for every experiment in the config, keyed by flag key. The result has a null
+ * prototype, so a lookup of a key no experiment has (`toString`, `__proto__`) is
+ * `undefined`, never something inherited from Object.prototype.
+ */
 export async function decideAll({ config, salt, ...identity }: DecideAllParams): Promise<Record<string, Decision>> {
   const experiments = uniqueExperiments(config);
   const decisions = await Promise.all(
     experiments.map((experiment) => decideExperiment({ experiment, salt, ...identity })),
   );
-  return Object.fromEntries(experiments.map((experiment, index) => [experiment.key, decisions[index]!]));
+  const byKey: Record<string, Decision> = Object.create(null);
+  experiments.forEach((experiment, index) => {
+    byKey[experiment.key] = decisions[index]!;
+  });
+  return byKey;
 }
 
 export type VariantMapForParams = DecideAllParams;
@@ -83,8 +95,18 @@ async function decideExperiment({ experiment, salt, ...identity }: DecideExperim
   const control = variants[0] ?? null;
 
   if (experiment.status !== 'Running') {
-    const deployed = variants.find((variant) => variant.id === experiment.deployedVariantId) ?? control;
+    // Only Deployed has a deployed variant; any other status (the writer emits none today) is control.
+    const deployed =
+      experiment.status === 'Deployed'
+        ? (variants.find((variant) => variant.id === experiment.deployedVariantId) ?? control)
+        : control;
     return notEnrolled({ experiment, variant: deployed, reason: 'not-running' });
+  }
+
+  // A bucketOn this evaluator does not know names an ID it cannot be given, so nobody is
+  // enrolled rather than guessing at 'visitor' (spec/SPEC.md, "Decisions").
+  if (!isBucketOn(experiment.bucketOn)) {
+    return notEnrolled({ experiment, variant: control, reason: 'wrong-id-kind' });
   }
 
   const hashId = experiment.bucketOn === 'customer_id' ? presentId(id) : presentId(visitorId);
@@ -133,8 +155,12 @@ const notEnrolled = ({ experiment, variant, reason }: NotEnrolledParams): NotEnr
 const presentId = (value: unknown): string | undefined =>
   typeof value === 'string' && value.length > 0 ? value : undefined;
 
+const isBucketOn = (value: unknown): value is BucketOn =>
+  typeof value === 'string' && (EXPERIMENT_BUCKET_ON as readonly string[]).includes(value);
+
+/** The config's experiments, skipping any entry that is not an object. */
 const experimentsOf = (config: Readonly<SdkConfig>): SdkExperiment[] =>
-  Array.isArray(config?.experiments) ? config.experiments : [];
+  Array.isArray(config?.experiments) ? config.experiments.filter(isObject) : [];
 
 /** The first experiment carrying the key wins; the writer guarantees keys are unique. */
 const findExperiment = (config: Readonly<SdkConfig>, key: string): SdkExperiment | undefined =>

@@ -69,12 +69,52 @@ export function parseConfigBody(body: unknown, websiteId: number): ParsedConfig 
 type Waiter = { resolve: () => void; reject: (error: Error) => void };
 
 /**
+ * How long a run of 401s is retried before polling stops. The tracking server can briefly
+ * refuse a valid key: a key created in the dashboard takes up to about 30 seconds to become
+ * active on every server.
+ */
+export const UNAUTHORIZED_GRACE_MS = 2 * 60_000;
+/** The first retry after a 401 inside the grace window; each later one doubles, up to the cap. */
+export const RETRY_BACKOFF_BASE_MS = 2_000;
+export const RETRY_BACKOFF_MAX_MS = 30_000;
+/** `Retry-After` is honoured within these bounds, so a bad header can neither spin nor stall the client. */
+export const RETRY_AFTER_MIN_MS = 1_000;
+export const RETRY_AFTER_MAX_MS = 5 * 60_000;
+
+const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
+/**
+ * `Retry-After` in milliseconds from `now`: delay-seconds or an HTTP date, clamped to
+ * RETRY_AFTER_MIN_MS..RETRY_AFTER_MAX_MS. Null when absent or unreadable.
+ */
+export function retryAfterMs(header: string | null, now: number): number | null {
+  const value = header?.trim();
+  if (!value) return null;
+  if (/^\d+$/.test(value)) return clamp(Number(value) * 1000, RETRY_AFTER_MIN_MS, RETRY_AFTER_MAX_MS);
+  // An HTTP date always names its weekday and month; this keeps Date.parse from reading "-5" as a year.
+  const at = /[A-Za-z]/.test(value) ? Date.parse(value) : Number.NaN;
+  if (Number.isNaN(at)) return null;
+  return clamp(at - now, RETRY_AFTER_MIN_MS, RETRY_AFTER_MAX_MS);
+}
+
+/** The delay before retry number `attempt` (1 for the first): exponential, capped. */
+export const backoffMs = (attempt: number): number =>
+  Math.min(RETRY_BACKOFF_MAX_MS, RETRY_BACKOFF_BASE_MS * 2 ** Math.max(0, attempt - 1));
+
+/**
  * Keeps the website's SDK config current with `GET /sdk/config`.
  *
  * - 304 keeps the config; 200 replaces it; anything else keeps the last good one and records
  *   the error. A version the SDK does not understand, or another website's config, is "no
  *   config": every key is unknown until it is fixed.
- * - 401 stops polling for good: a revoked or mistyped key will not start working by retrying.
+ * - 503 and 429 are transient: the next request waits for `Retry-After` when the server sends
+ *   one (1 second to 5 minutes), and otherwise for the next poll. The server answers 503 while
+ *   it starts up.
+ * - 401 is retried with backoff (2 s doubling to 30 s) for UNAUTHORIZED_GRACE_MS from the first
+ *   401 in a row, because a key just created takes up to about 30 seconds to become active.
+ *   Only when every answer in that window was 401 does polling stop for good: a revoked or
+ *   mistyped key will not start working by retrying. Any other answer ends the run.
+ * - While a retry is pending, no request is made before its time, whatever asks for one.
  * - In the background, a timer polls every `pollIntervalMs`. It is unref'd where the runtime
  *   allows it, so it never keeps a Node process alive, and `close()` clears it.
  * - Without a background timer (edge workers), a call that finds the config older than the
@@ -89,6 +129,13 @@ export function createConfigPoller(params: CreateConfigPollerParams): ConfigPoll
   let stopped = false;
   let closed = false;
   let timer: unknown = null;
+  /** When the pending retry is due; null when requests follow the normal poll schedule. */
+  let retryAt: number | null = null;
+  let retryTimer: unknown = null;
+  /** Retries made in the current run of 401s, for the backoff. */
+  let unauthorizedRetries = 0;
+  /** When the current run of 401s began; null when the last answer was not a 401. */
+  let firstUnauthorizedAt: number | null = null;
   const waiters = new Set<Waiter>();
 
   const stopError = (): Error =>
@@ -104,9 +151,35 @@ export function createConfigPoller(params: CreateConfigPollerParams): ConfigPoll
     }
   };
 
-  const report = (kind: PertentoErrorKind, message: string, status?: number): void => {
-    errors.report(status === undefined ? { source: 'config', kind, message } : { source: 'config', kind, message, status });
+  const report = (kind: PertentoErrorKind, message: string, status?: number, alwaysLog = false): void => {
+    errors.report(
+      status === undefined ? { source: 'config', kind, message } : { source: 'config', kind, message, status },
+      { alwaysLog },
+    );
   };
+
+  const clearRetry = (): void => {
+    retryAt = null;
+    if (retryTimer !== null) clearTimeout(retryTimer as number);
+    retryTimer = null;
+  };
+
+  /** No request before `delayMs` from now. With a background timer, one is made then. */
+  const scheduleRetry = (delayMs: number): void => {
+    retryAt = now() + delayMs;
+    if (retryTimer !== null) clearTimeout(retryTimer as number);
+    retryTimer = null;
+    if (!background || timer === null) return;
+    const handle: unknown = setTimeout(() => {
+      retryTimer = null;
+      void refresh();
+    }, delayMs);
+    retryTimer = handle;
+    const unref = typeof handle === 'object' && handle !== null ? (handle as { unref?: unknown }).unref : undefined;
+    if (typeof unref === 'function') unref.call(handle);
+  };
+
+  const seconds = (ms: number): string => `${Math.round(ms / 1000)} s`;
 
   const accept = async (response: FetchResponse): Promise<void> => {
     let body: unknown;
@@ -142,28 +215,68 @@ export function createConfigPoller(params: CreateConfigPollerParams): ConfigPoll
       return;
     }
 
+    if (response.status !== 401) {
+      firstUnauthorizedAt = null;
+      unauthorizedRetries = 0;
+    }
+
     if (response.status === 304 && state) {
+      clearRetry();
       errors.clear('config');
       return;
     }
     if (response.status === 200) {
+      clearRetry();
       await accept(response);
       return;
     }
 
     const message = await serverMessage(response);
     if (response.status === 401) {
-      stopped = true;
-      clearTimer();
-      report('unauthorized', `The server key was refused (${message}). Config polling has stopped.`, 401);
+      const at = now();
+      firstUnauthorizedAt ??= at;
+      if (at - firstUnauthorizedAt >= UNAUTHORIZED_GRACE_MS) {
+        stopped = true;
+        clearTimer();
+        clearRetry();
+        report(
+          'unauthorized',
+          `The server key was refused (${message}) for ${seconds(UNAUTHORIZED_GRACE_MS)}. Config polling has stopped: ` +
+            'check the key, or create a new one and restart.',
+          401,
+          true,
+        );
+        return;
+      }
+      unauthorizedRetries += 1;
+      const delay = backoffMs(unauthorizedRetries);
+      scheduleRetry(delay);
+      report(
+        'unauthorized',
+        `The server key was refused (${message}). A key just created can take about 30 seconds to become ` +
+          `active, so the client retries in ${seconds(delay)} and stops after ${seconds(UNAUTHORIZED_GRACE_MS)} of refusals.`,
+        401,
+      );
       return;
     }
+    if (response.status === 503 || response.status === 429) {
+      const delay = retryAfterMs(response.headers.get('retry-after'), now());
+      if (delay !== null) scheduleRetry(delay);
+      else clearRetry();
+      const next = delay === null ? 'with the next poll' : `in ${seconds(delay)}, as Retry-After asks`;
+      report(kindForStatus(response.status), `Config request failed: ${message}. Retrying ${next}.`, response.status);
+      return;
+    }
+    clearRetry();
     report(kindForStatus(response.status), `Config request failed: ${message}`, response.status);
   };
 
   const refresh = (): Promise<void> => {
     if (inFlight) return inFlight;
     if (stopped || closed) return Promise.resolve();
+    // A retry is pending: nothing goes out before it is due, so a server that asked for room
+    // (Retry-After, or a key not yet active) is not hit on every request.
+    if (retryAt !== null && now() < retryAt) return Promise.resolve();
     inFlight = load()
       .catch((error: unknown) => {
         // load() handles every expected failure itself; this is a bug guard, never a throw.
@@ -183,7 +296,8 @@ export function createConfigPoller(params: CreateConfigPollerParams): ConfigPoll
 
   const refreshIfStale = (): void => {
     if (inFlight || stopped || closed) return;
-    if (now() - lastAttemptAt >= pollIntervalMs) void refresh();
+    const due = retryAt !== null ? now() >= retryAt : now() - lastAttemptAt >= pollIntervalMs;
+    if (due) void refresh();
   };
 
   const ready = (timeoutMs: number): Promise<void> => {
@@ -214,6 +328,7 @@ export function createConfigPoller(params: CreateConfigPollerParams): ConfigPoll
   const close = (): void => {
     closed = true;
     clearTimer();
+    clearRetry();
     settleWaiters();
   };
 

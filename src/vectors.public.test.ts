@@ -11,6 +11,10 @@ type VectorFile = {
 };
 const vectors = rawVectors as unknown as VectorFile;
 
+// `weightWalks` are not run here: the weight walk is internal to the evaluator and the public
+// API cannot hand it a bucket, so src/evaluator/vectors.test.ts runs them directly. Every
+// decision vector runs below, including the all-zero-weights and no-variants cases.
+
 describe('spec/vectors.json through the public API', async () => {
   const { fetch } = fakeFetch({
     status: 200,

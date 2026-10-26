@@ -9,13 +9,21 @@
  * committed. Regenerating them silently would turn "the implementation is wrong" into
  * "the vectors moved", which is exactly what they exist to catch.
  */
-import type { DecideIdentity, Decision, SdkConfig, SdkExperiment } from '../src/evaluator';
+import type {
+  BucketOn,
+  DecideIdentity,
+  Decision,
+  SdkConfig,
+  SdkExperiment,
+  SdkVariant,
+} from '../src/evaluator';
 import { existsSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   bucketFor,
   decide,
   deriveEnrolmentId,
+  pickByBucket,
   SDK_CONFIG_VERSION,
   variantMapFor,
 } from '../src/evaluator';
@@ -116,6 +124,45 @@ const CONFIG: SdkConfig = {
         { id: 9041, key: 'a', weight: 70, payload: null },
       ],
     }),
+    // Everything below exists for one spec branch each. Their targeting names attributes no
+    // variant-map input carries, so the variant maps are the same as without them.
+    experiment({
+      id: 506,
+      key: 'all-zero-weights',
+      variants: [
+        { id: 9051, key: 'control', weight: 0, payload: 'c' },
+        { id: 9052, key: 'treatment', weight: 0, payload: 't' },
+      ],
+    }),
+    experiment({ id: 507, key: 'deployed-without-variant-id', status: 'Deployed', deployedVariantId: null }),
+    experiment({ id: 508, key: 'deployed-naming-no-variant', status: 'Deployed', deployedVariantId: 9999 }),
+    experiment({ id: 509, key: 'no-variants', variants: [] }),
+    experiment({
+      id: 510,
+      key: 'unknown-status',
+      // The writer emits only Running and Deployed; any other status is not running, with control.
+      status: 'Paused' as unknown as SdkExperiment['status'],
+      deployedVariantId: 9002,
+    }),
+    experiment({ id: 511, key: 'unknown-bucket-on', bucketOn: 'account' as unknown as BucketOn }),
+    experiment({
+      id: 512,
+      key: 'equals-string',
+      targeting: [{ attribute: 'tier', operator: 'equals', value: 'gold' }],
+    }),
+    experiment({ id: 513, key: 'equals-number', targeting: [{ attribute: 'level', operator: 'equals', value: 3 }] }),
+    experiment({
+      id: 514,
+      key: 'equals-boolean',
+      targeting: [{ attribute: 'verified', operator: 'equals', value: true }],
+    }),
+    experiment({ id: 515, key: 'less-than', targeting: [{ attribute: 'score', operator: '<', value: 50 }] }),
+    experiment({ id: 516, key: 'exists', targeting: [{ attribute: 'referrer', operator: 'exists' }] }),
+    experiment({
+      id: 517,
+      key: 'in-list',
+      targeting: [{ attribute: 'region', operator: 'in', value: ['eu', 'apac', 7] }],
+    }),
   ],
 };
 
@@ -167,6 +214,95 @@ const DECISION_CASES: DecisionCase[] = [
     input: { key: 'pro-banner', visitorId: VISITOR, attributes: { ...PRO_ATTRIBUTES, seats: '5' } },
   },
   { name: 'reason targeting (no attributes)', input: { key: 'pro-banner', visitorId: VISITOR } },
+  {
+    name: 'Running with every weight 0 admits nobody (not-running)',
+    input: { key: 'all-zero-weights', visitorId: VISITOR },
+  },
+  { name: 'Deployed with deployedVariantId null returns control', input: { key: 'deployed-without-variant-id' } },
+  { name: 'Deployed naming no variant returns control', input: { key: 'deployed-naming-no-variant' } },
+  { name: 'experiment with no variants (all null, not-running)', input: { key: 'no-variants', visitorId: VISITOR } },
+  {
+    name: 'status other than Running or Deployed returns control, not the deployed variant',
+    input: { key: 'unknown-status', visitorId: VISITOR },
+  },
+  {
+    name: 'unknown bucketOn enrols nobody (wrong-id-kind)',
+    input: { key: 'unknown-bucket-on', visitorId: VISITOR, id: 'customer-42' },
+  },
+  { name: 'unknown bucketOn without any ID', input: { key: 'unknown-bucket-on' } },
+  { name: 'equals string matches', input: { key: 'equals-string', visitorId: VISITOR, attributes: { tier: 'gold' } } },
+  {
+    name: 'equals string is case-sensitive',
+    input: { key: 'equals-string', visitorId: VISITOR, attributes: { tier: 'Gold' } },
+  },
+  { name: 'equals number matches', input: { key: 'equals-number', visitorId: VISITOR, attributes: { level: 3 } } },
+  {
+    name: 'equals number: "3" is not 3',
+    input: { key: 'equals-number', visitorId: VISITOR, attributes: { level: '3' } },
+  },
+  {
+    name: 'equals boolean matches true',
+    input: { key: 'equals-boolean', visitorId: VISITOR, attributes: { verified: true } },
+  },
+  {
+    name: 'equals boolean: "true" is not true',
+    input: { key: 'equals-boolean', visitorId: VISITOR, attributes: { verified: 'true' } },
+  },
+  { name: '< matches below the value', input: { key: 'less-than', visitorId: VISITOR, attributes: { score: 49.5 } } },
+  { name: '< fails at the value', input: { key: 'less-than', visitorId: VISITOR, attributes: { score: 50 } } },
+  {
+    name: 'exists matches a present falsy value',
+    input: { key: 'exists', visitorId: VISITOR, attributes: { referrer: '' } },
+  },
+  { name: 'exists fails when missing', input: { key: 'exists', visitorId: VISITOR, attributes: { other: 'x' } } },
+  { name: 'exists fails when null', input: { key: 'exists', visitorId: VISITOR, attributes: { referrer: null } } },
+  { name: 'in matches a string', input: { key: 'in-list', visitorId: VISITOR, attributes: { region: 'apac' } } },
+  { name: 'in matches a number', input: { key: 'in-list', visitorId: VISITOR, attributes: { region: 7 } } },
+  { name: 'in fails outside the list', input: { key: 'in-list', visitorId: VISITOR, attributes: { region: 'us' } } },
+  { name: 'in: "7" is not 7', input: { key: 'in-list', visitorId: VISITOR, attributes: { region: '7' } } },
+];
+
+type WeightWalkCase = { name: string; variants: SdkVariant[]; buckets: number[] };
+
+const walkVariant = (id: number, weight: number): SdkVariant => ({ id, key: `v${id}`, weight, payload: null });
+
+/**
+ * The weight walk at chosen buckets, so a port with a different scaling (`bucket % total`
+ * instead of `floor(bucket * total / 10000)`) or boundary (`<=` instead of `<`) fails.
+ */
+const WEIGHT_WALK_CASES: WeightWalkCase[] = [
+  {
+    name: '70/30 in basis points',
+    variants: [walkVariant(1, 7000), walkVariant(2, 3000)],
+    buckets: [0, 6999, 7000, 9999],
+  },
+  {
+    name: '70/30 totalling 100 (scaled)',
+    variants: [walkVariant(1, 70), walkVariant(2, 30)],
+    buckets: [0, 6999, 7000, 9999],
+  },
+  {
+    name: '70/30 totalling 100, given out of id order',
+    variants: [walkVariant(2, 30), walkVariant(1, 70)],
+    buckets: [6999, 7000],
+  },
+  {
+    name: 'weights totalling 15000 (scaled down)',
+    variants: [walkVariant(1, 6000), walkVariant(2, 9000)],
+    buckets: [0, 3999, 4000, 9999],
+  },
+  {
+    name: 'three-way 3334/3333/3333',
+    variants: [walkVariant(1, 3334), walkVariant(2, 3333), walkVariant(3, 3333)],
+    buckets: [3333, 3334, 6666, 6667, 9999],
+  },
+  {
+    name: 'zero, negative and fractional weights',
+    variants: [walkVariant(1, 0), walkVariant(2, -500), walkVariant(3, 2500.9), walkVariant(4, 7500)],
+    buckets: [0, 2499, 2500, 9999],
+  },
+  { name: 'every weight 0', variants: [walkVariant(1, 0), walkVariant(2, 0)], buckets: [0, 9999] },
+  { name: 'no variants', variants: [], buckets: [0] },
 ];
 
 type VariantMapCase = { name: string; input: DecideIdentity };
@@ -213,6 +349,13 @@ async function main(): Promise<void> {
     decisions.push({ name, input, expected: await decide({ config: CONFIG, salt: SALT_A, ...input }) });
   }
 
+  const weightWalks = [];
+  for (const { name, variants, buckets: walkBuckets } of WEIGHT_WALK_CASES) {
+    for (const bucket of walkBuckets) {
+      weightWalks.push({ name, variants, bucket, expected: pickByBucket(variants, bucket)?.id ?? null });
+    }
+  }
+
   const variantMaps: Array<VariantMapCase & { expected: Record<string, string> }> = [];
   for (const { name, input } of VARIANT_MAP_CASES) {
     variantMaps.push({ name, input, expected: await variantMapFor({ config: CONFIG, salt: SALT_A, ...input }) });
@@ -221,9 +364,10 @@ async function main(): Promise<void> {
   const file = {
     specVersion: SDK_CONFIG_VERSION,
     description:
-      'Test vectors for spec/SPEC.md. buckets and enrolmentIds carry their own salt; decisions and variantMaps all use decisionSalt and decisionConfig.',
+      'Test vectors for spec/SPEC.md. buckets and enrolmentIds carry their own salt; decisions and variantMaps all use decisionSalt and decisionConfig; weightWalks give the variant id (or null) the weight walk picks at a bucket.',
     buckets,
     enrolmentIds,
+    weightWalks,
     decisionSalt: SALT_A,
     decisionConfig: CONFIG,
     decisions,
@@ -231,7 +375,7 @@ async function main(): Promise<void> {
   };
   writeFileSync(OUT, `${JSON.stringify(file, null, 2)}\n`);
   console.log(
-    `Wrote ${buckets.length} buckets, ${enrolmentIds.length} enrolment IDs, ${decisions.length} decisions, ${variantMaps.length} variant maps to ${OUT}`,
+    `Wrote ${buckets.length} buckets, ${enrolmentIds.length} enrolment IDs, ${weightWalks.length} weight walks, ${decisions.length} decisions, ${variantMaps.length} variant maps to ${OUT}`,
   );
 }
 

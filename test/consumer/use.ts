@@ -14,7 +14,14 @@ export async function example(): Promise<string> {
   const visitorId = pertento.createVisitorId();
   const decision: Decision = await pertento.getVariant('new-checkout', { visitorId, attributes: { plan: 'pro' } });
   const all: Record<string, Decision> = await pertento.getAll({ id: 'customer-42' });
-  const result: TrackResult = await pertento.track('purchase', { visitorId, data: { revenue: 4900 } });
+  const result: TrackResult = await pertento.track('purchase', {
+    keys: ['new-checkout'],
+    visitorId,
+    attributes: { plan: 'pro' },
+    data: { revenue: 4900 },
+  });
+  // @ts-expect-error keys is required
+  await pertento.track('purchase', { visitorId });
   const error: PertentoError | null = result.ok ? pertento.lastError : result.error;
   pertento.close();
   return `${pertento.seedScript([decision, ...Object.values(all)], visitorId, { nonce: 'abc' })}${error?.kind ?? ''}`;

@@ -1,6 +1,6 @@
 {
   "specVersion": 1,
-  "description": "Test vectors for spec/SPEC.md. buckets and enrolmentIds carry their own salt; decisions and variantMaps all use decisionSalt and decisionConfig.",
+  "description": "Test vectors for spec/SPEC.md. buckets and enrolmentIds carry their own salt; decisions and variantMaps all use decisionSalt and decisionConfig; weightWalks give the variant id (or null) the weight walk picks at a bucket.",
   "buckets": [
     {
       "salt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
@@ -579,6 +579,567 @@
       "enrolmentId": "55dcc59c-eb20-87e4-8240-f65fcaaf7b4e"
     }
   ],
+  "weightWalks": [
+    {
+      "name": "70/30 in basis points",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 7000,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 3000,
+          "payload": null
+        }
+      ],
+      "bucket": 0,
+      "expected": 1
+    },
+    {
+      "name": "70/30 in basis points",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 7000,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 3000,
+          "payload": null
+        }
+      ],
+      "bucket": 6999,
+      "expected": 1
+    },
+    {
+      "name": "70/30 in basis points",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 7000,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 3000,
+          "payload": null
+        }
+      ],
+      "bucket": 7000,
+      "expected": 2
+    },
+    {
+      "name": "70/30 in basis points",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 7000,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 3000,
+          "payload": null
+        }
+      ],
+      "bucket": 9999,
+      "expected": 2
+    },
+    {
+      "name": "70/30 totalling 100 (scaled)",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 70,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 30,
+          "payload": null
+        }
+      ],
+      "bucket": 0,
+      "expected": 1
+    },
+    {
+      "name": "70/30 totalling 100 (scaled)",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 70,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 30,
+          "payload": null
+        }
+      ],
+      "bucket": 6999,
+      "expected": 1
+    },
+    {
+      "name": "70/30 totalling 100 (scaled)",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 70,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 30,
+          "payload": null
+        }
+      ],
+      "bucket": 7000,
+      "expected": 2
+    },
+    {
+      "name": "70/30 totalling 100 (scaled)",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 70,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 30,
+          "payload": null
+        }
+      ],
+      "bucket": 9999,
+      "expected": 2
+    },
+    {
+      "name": "70/30 totalling 100, given out of id order",
+      "variants": [
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 30,
+          "payload": null
+        },
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 70,
+          "payload": null
+        }
+      ],
+      "bucket": 6999,
+      "expected": 1
+    },
+    {
+      "name": "70/30 totalling 100, given out of id order",
+      "variants": [
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 30,
+          "payload": null
+        },
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 70,
+          "payload": null
+        }
+      ],
+      "bucket": 7000,
+      "expected": 2
+    },
+    {
+      "name": "weights totalling 15000 (scaled down)",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 6000,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 9000,
+          "payload": null
+        }
+      ],
+      "bucket": 0,
+      "expected": 1
+    },
+    {
+      "name": "weights totalling 15000 (scaled down)",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 6000,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 9000,
+          "payload": null
+        }
+      ],
+      "bucket": 3999,
+      "expected": 1
+    },
+    {
+      "name": "weights totalling 15000 (scaled down)",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 6000,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 9000,
+          "payload": null
+        }
+      ],
+      "bucket": 4000,
+      "expected": 2
+    },
+    {
+      "name": "weights totalling 15000 (scaled down)",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 6000,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 9000,
+          "payload": null
+        }
+      ],
+      "bucket": 9999,
+      "expected": 2
+    },
+    {
+      "name": "three-way 3334/3333/3333",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 3334,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 3333,
+          "payload": null
+        },
+        {
+          "id": 3,
+          "key": "v3",
+          "weight": 3333,
+          "payload": null
+        }
+      ],
+      "bucket": 3333,
+      "expected": 1
+    },
+    {
+      "name": "three-way 3334/3333/3333",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 3334,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 3333,
+          "payload": null
+        },
+        {
+          "id": 3,
+          "key": "v3",
+          "weight": 3333,
+          "payload": null
+        }
+      ],
+      "bucket": 3334,
+      "expected": 2
+    },
+    {
+      "name": "three-way 3334/3333/3333",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 3334,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 3333,
+          "payload": null
+        },
+        {
+          "id": 3,
+          "key": "v3",
+          "weight": 3333,
+          "payload": null
+        }
+      ],
+      "bucket": 6666,
+      "expected": 2
+    },
+    {
+      "name": "three-way 3334/3333/3333",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 3334,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 3333,
+          "payload": null
+        },
+        {
+          "id": 3,
+          "key": "v3",
+          "weight": 3333,
+          "payload": null
+        }
+      ],
+      "bucket": 6667,
+      "expected": 3
+    },
+    {
+      "name": "three-way 3334/3333/3333",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 3334,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 3333,
+          "payload": null
+        },
+        {
+          "id": 3,
+          "key": "v3",
+          "weight": 3333,
+          "payload": null
+        }
+      ],
+      "bucket": 9999,
+      "expected": 3
+    },
+    {
+      "name": "zero, negative and fractional weights",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 0,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": -500,
+          "payload": null
+        },
+        {
+          "id": 3,
+          "key": "v3",
+          "weight": 2500.9,
+          "payload": null
+        },
+        {
+          "id": 4,
+          "key": "v4",
+          "weight": 7500,
+          "payload": null
+        }
+      ],
+      "bucket": 0,
+      "expected": 3
+    },
+    {
+      "name": "zero, negative and fractional weights",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 0,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": -500,
+          "payload": null
+        },
+        {
+          "id": 3,
+          "key": "v3",
+          "weight": 2500.9,
+          "payload": null
+        },
+        {
+          "id": 4,
+          "key": "v4",
+          "weight": 7500,
+          "payload": null
+        }
+      ],
+      "bucket": 2499,
+      "expected": 3
+    },
+    {
+      "name": "zero, negative and fractional weights",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 0,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": -500,
+          "payload": null
+        },
+        {
+          "id": 3,
+          "key": "v3",
+          "weight": 2500.9,
+          "payload": null
+        },
+        {
+          "id": 4,
+          "key": "v4",
+          "weight": 7500,
+          "payload": null
+        }
+      ],
+      "bucket": 2500,
+      "expected": 4
+    },
+    {
+      "name": "zero, negative and fractional weights",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 0,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": -500,
+          "payload": null
+        },
+        {
+          "id": 3,
+          "key": "v3",
+          "weight": 2500.9,
+          "payload": null
+        },
+        {
+          "id": 4,
+          "key": "v4",
+          "weight": 7500,
+          "payload": null
+        }
+      ],
+      "bucket": 9999,
+      "expected": 4
+    },
+    {
+      "name": "every weight 0",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 0,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 0,
+          "payload": null
+        }
+      ],
+      "bucket": 0,
+      "expected": null
+    },
+    {
+      "name": "every weight 0",
+      "variants": [
+        {
+          "id": 1,
+          "key": "v1",
+          "weight": 0,
+          "payload": null
+        },
+        {
+          "id": 2,
+          "key": "v2",
+          "weight": 0,
+          "payload": null
+        }
+      ],
+      "bucket": 9999,
+      "expected": null
+    },
+    {
+      "name": "no variants",
+      "variants": [],
+      "bucket": 0,
+      "expected": null
+    }
+  ],
   "decisionSalt": "5f1d3c9a7e2b4d6f8a0c1e3f5a7b9d1c3e5f7a9b1d3f5e7c9a1b3d5f7e9c1a3b",
   "decisionConfig": {
     "version": 1,
@@ -741,6 +1302,346 @@
         ],
         "deployedVariantId": null,
         "targeting": []
+      },
+      {
+        "id": 506,
+        "key": "all-zero-weights",
+        "status": "Running",
+        "bucketOn": "visitor",
+        "variants": [
+          {
+            "id": 9051,
+            "key": "control",
+            "weight": 0,
+            "payload": "c"
+          },
+          {
+            "id": 9052,
+            "key": "treatment",
+            "weight": 0,
+            "payload": "t"
+          }
+        ],
+        "deployedVariantId": null,
+        "targeting": []
+      },
+      {
+        "id": 507,
+        "key": "deployed-without-variant-id",
+        "status": "Deployed",
+        "bucketOn": "visitor",
+        "variants": [
+          {
+            "id": 9001,
+            "key": "control",
+            "weight": 5000,
+            "payload": {
+              "layout": "classic"
+            }
+          },
+          {
+            "id": 9002,
+            "key": "one-page",
+            "weight": 5000,
+            "payload": {
+              "layout": "single",
+              "steps": 1
+            }
+          }
+        ],
+        "deployedVariantId": null,
+        "targeting": []
+      },
+      {
+        "id": 508,
+        "key": "deployed-naming-no-variant",
+        "status": "Deployed",
+        "bucketOn": "visitor",
+        "variants": [
+          {
+            "id": 9001,
+            "key": "control",
+            "weight": 5000,
+            "payload": {
+              "layout": "classic"
+            }
+          },
+          {
+            "id": 9002,
+            "key": "one-page",
+            "weight": 5000,
+            "payload": {
+              "layout": "single",
+              "steps": 1
+            }
+          }
+        ],
+        "deployedVariantId": 9999,
+        "targeting": []
+      },
+      {
+        "id": 509,
+        "key": "no-variants",
+        "status": "Running",
+        "bucketOn": "visitor",
+        "variants": [],
+        "deployedVariantId": null,
+        "targeting": []
+      },
+      {
+        "id": 510,
+        "key": "unknown-status",
+        "status": "Paused",
+        "bucketOn": "visitor",
+        "variants": [
+          {
+            "id": 9001,
+            "key": "control",
+            "weight": 5000,
+            "payload": {
+              "layout": "classic"
+            }
+          },
+          {
+            "id": 9002,
+            "key": "one-page",
+            "weight": 5000,
+            "payload": {
+              "layout": "single",
+              "steps": 1
+            }
+          }
+        ],
+        "deployedVariantId": 9002,
+        "targeting": []
+      },
+      {
+        "id": 511,
+        "key": "unknown-bucket-on",
+        "status": "Running",
+        "bucketOn": "account",
+        "variants": [
+          {
+            "id": 9001,
+            "key": "control",
+            "weight": 5000,
+            "payload": {
+              "layout": "classic"
+            }
+          },
+          {
+            "id": 9002,
+            "key": "one-page",
+            "weight": 5000,
+            "payload": {
+              "layout": "single",
+              "steps": 1
+            }
+          }
+        ],
+        "deployedVariantId": null,
+        "targeting": []
+      },
+      {
+        "id": 512,
+        "key": "equals-string",
+        "status": "Running",
+        "bucketOn": "visitor",
+        "variants": [
+          {
+            "id": 9001,
+            "key": "control",
+            "weight": 5000,
+            "payload": {
+              "layout": "classic"
+            }
+          },
+          {
+            "id": 9002,
+            "key": "one-page",
+            "weight": 5000,
+            "payload": {
+              "layout": "single",
+              "steps": 1
+            }
+          }
+        ],
+        "deployedVariantId": null,
+        "targeting": [
+          {
+            "attribute": "tier",
+            "operator": "equals",
+            "value": "gold"
+          }
+        ]
+      },
+      {
+        "id": 513,
+        "key": "equals-number",
+        "status": "Running",
+        "bucketOn": "visitor",
+        "variants": [
+          {
+            "id": 9001,
+            "key": "control",
+            "weight": 5000,
+            "payload": {
+              "layout": "classic"
+            }
+          },
+          {
+            "id": 9002,
+            "key": "one-page",
+            "weight": 5000,
+            "payload": {
+              "layout": "single",
+              "steps": 1
+            }
+          }
+        ],
+        "deployedVariantId": null,
+        "targeting": [
+          {
+            "attribute": "level",
+            "operator": "equals",
+            "value": 3
+          }
+        ]
+      },
+      {
+        "id": 514,
+        "key": "equals-boolean",
+        "status": "Running",
+        "bucketOn": "visitor",
+        "variants": [
+          {
+            "id": 9001,
+            "key": "control",
+            "weight": 5000,
+            "payload": {
+              "layout": "classic"
+            }
+          },
+          {
+            "id": 9002,
+            "key": "one-page",
+            "weight": 5000,
+            "payload": {
+              "layout": "single",
+              "steps": 1
+            }
+          }
+        ],
+        "deployedVariantId": null,
+        "targeting": [
+          {
+            "attribute": "verified",
+            "operator": "equals",
+            "value": true
+          }
+        ]
+      },
+      {
+        "id": 515,
+        "key": "less-than",
+        "status": "Running",
+        "bucketOn": "visitor",
+        "variants": [
+          {
+            "id": 9001,
+            "key": "control",
+            "weight": 5000,
+            "payload": {
+              "layout": "classic"
+            }
+          },
+          {
+            "id": 9002,
+            "key": "one-page",
+            "weight": 5000,
+            "payload": {
+              "layout": "single",
+              "steps": 1
+            }
+          }
+        ],
+        "deployedVariantId": null,
+        "targeting": [
+          {
+            "attribute": "score",
+            "operator": "<",
+            "value": 50
+          }
+        ]
+      },
+      {
+        "id": 516,
+        "key": "exists",
+        "status": "Running",
+        "bucketOn": "visitor",
+        "variants": [
+          {
+            "id": 9001,
+            "key": "control",
+            "weight": 5000,
+            "payload": {
+              "layout": "classic"
+            }
+          },
+          {
+            "id": 9002,
+            "key": "one-page",
+            "weight": 5000,
+            "payload": {
+              "layout": "single",
+              "steps": 1
+            }
+          }
+        ],
+        "deployedVariantId": null,
+        "targeting": [
+          {
+            "attribute": "referrer",
+            "operator": "exists"
+          }
+        ]
+      },
+      {
+        "id": 517,
+        "key": "in-list",
+        "status": "Running",
+        "bucketOn": "visitor",
+        "variants": [
+          {
+            "id": 9001,
+            "key": "control",
+            "weight": 5000,
+            "payload": {
+              "layout": "classic"
+            }
+          },
+          {
+            "id": 9002,
+            "key": "one-page",
+            "weight": 5000,
+            "payload": {
+              "layout": "single",
+              "steps": 1
+            }
+          }
+        ],
+        "deployedVariantId": null,
+        "targeting": [
+          {
+            "attribute": "region",
+            "operator": "in",
+            "value": [
+              "eu",
+              "apac",
+              7
+            ]
+          }
+        ]
       }
     ]
   },
@@ -1123,6 +2024,417 @@
         "variantId": 9021,
         "variantKey": "off",
         "payload": false,
+        "enrolled": false,
+        "reason": "targeting"
+      }
+    },
+    {
+      "name": "Running with every weight 0 admits nobody (not-running)",
+      "input": {
+        "key": "all-zero-weights",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
+      },
+      "expected": {
+        "experimentId": 506,
+        "variantId": 9051,
+        "variantKey": "control",
+        "payload": "c",
+        "enrolled": false,
+        "reason": "not-running"
+      }
+    },
+    {
+      "name": "Deployed with deployedVariantId null returns control",
+      "input": {
+        "key": "deployed-without-variant-id"
+      },
+      "expected": {
+        "experimentId": 507,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": false,
+        "reason": "not-running"
+      }
+    },
+    {
+      "name": "Deployed naming no variant returns control",
+      "input": {
+        "key": "deployed-naming-no-variant"
+      },
+      "expected": {
+        "experimentId": 508,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": false,
+        "reason": "not-running"
+      }
+    },
+    {
+      "name": "experiment with no variants (all null, not-running)",
+      "input": {
+        "key": "no-variants",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
+      },
+      "expected": {
+        "experimentId": 509,
+        "variantId": null,
+        "variantKey": null,
+        "payload": null,
+        "enrolled": false,
+        "reason": "not-running"
+      }
+    },
+    {
+      "name": "status other than Running or Deployed returns control, not the deployed variant",
+      "input": {
+        "key": "unknown-status",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
+      },
+      "expected": {
+        "experimentId": 510,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": false,
+        "reason": "not-running"
+      }
+    },
+    {
+      "name": "unknown bucketOn enrols nobody (wrong-id-kind)",
+      "input": {
+        "key": "unknown-bucket-on",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "id": "customer-42"
+      },
+      "expected": {
+        "experimentId": 511,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": false,
+        "reason": "wrong-id-kind"
+      }
+    },
+    {
+      "name": "unknown bucketOn without any ID",
+      "input": {
+        "key": "unknown-bucket-on"
+      },
+      "expected": {
+        "experimentId": 511,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": false,
+        "reason": "wrong-id-kind"
+      }
+    },
+    {
+      "name": "equals string matches",
+      "input": {
+        "key": "equals-string",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "tier": "gold"
+        }
+      },
+      "expected": {
+        "experimentId": 512,
+        "variantId": 9002,
+        "variantKey": "one-page",
+        "payload": {
+          "layout": "single",
+          "steps": 1
+        },
+        "enrolled": true
+      }
+    },
+    {
+      "name": "equals string is case-sensitive",
+      "input": {
+        "key": "equals-string",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "tier": "Gold"
+        }
+      },
+      "expected": {
+        "experimentId": 512,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": false,
+        "reason": "targeting"
+      }
+    },
+    {
+      "name": "equals number matches",
+      "input": {
+        "key": "equals-number",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "level": 3
+        }
+      },
+      "expected": {
+        "experimentId": 513,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": true
+      }
+    },
+    {
+      "name": "equals number: \"3\" is not 3",
+      "input": {
+        "key": "equals-number",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "level": "3"
+        }
+      },
+      "expected": {
+        "experimentId": 513,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": false,
+        "reason": "targeting"
+      }
+    },
+    {
+      "name": "equals boolean matches true",
+      "input": {
+        "key": "equals-boolean",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "verified": true
+        }
+      },
+      "expected": {
+        "experimentId": 514,
+        "variantId": 9002,
+        "variantKey": "one-page",
+        "payload": {
+          "layout": "single",
+          "steps": 1
+        },
+        "enrolled": true
+      }
+    },
+    {
+      "name": "equals boolean: \"true\" is not true",
+      "input": {
+        "key": "equals-boolean",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "verified": "true"
+        }
+      },
+      "expected": {
+        "experimentId": 514,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": false,
+        "reason": "targeting"
+      }
+    },
+    {
+      "name": "< matches below the value",
+      "input": {
+        "key": "less-than",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "score": 49.5
+        }
+      },
+      "expected": {
+        "experimentId": 515,
+        "variantId": 9002,
+        "variantKey": "one-page",
+        "payload": {
+          "layout": "single",
+          "steps": 1
+        },
+        "enrolled": true
+      }
+    },
+    {
+      "name": "< fails at the value",
+      "input": {
+        "key": "less-than",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "score": 50
+        }
+      },
+      "expected": {
+        "experimentId": 515,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": false,
+        "reason": "targeting"
+      }
+    },
+    {
+      "name": "exists matches a present falsy value",
+      "input": {
+        "key": "exists",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "referrer": ""
+        }
+      },
+      "expected": {
+        "experimentId": 516,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": true
+      }
+    },
+    {
+      "name": "exists fails when missing",
+      "input": {
+        "key": "exists",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "other": "x"
+        }
+      },
+      "expected": {
+        "experimentId": 516,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": false,
+        "reason": "targeting"
+      }
+    },
+    {
+      "name": "exists fails when null",
+      "input": {
+        "key": "exists",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "referrer": null
+        }
+      },
+      "expected": {
+        "experimentId": 516,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": false,
+        "reason": "targeting"
+      }
+    },
+    {
+      "name": "in matches a string",
+      "input": {
+        "key": "in-list",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "region": "apac"
+        }
+      },
+      "expected": {
+        "experimentId": 517,
+        "variantId": 9002,
+        "variantKey": "one-page",
+        "payload": {
+          "layout": "single",
+          "steps": 1
+        },
+        "enrolled": true
+      }
+    },
+    {
+      "name": "in matches a number",
+      "input": {
+        "key": "in-list",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "region": 7
+        }
+      },
+      "expected": {
+        "experimentId": 517,
+        "variantId": 9002,
+        "variantKey": "one-page",
+        "payload": {
+          "layout": "single",
+          "steps": 1
+        },
+        "enrolled": true
+      }
+    },
+    {
+      "name": "in fails outside the list",
+      "input": {
+        "key": "in-list",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "region": "us"
+        }
+      },
+      "expected": {
+        "experimentId": 517,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
+        "enrolled": false,
+        "reason": "targeting"
+      }
+    },
+    {
+      "name": "in: \"7\" is not 7",
+      "input": {
+        "key": "in-list",
+        "visitorId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "attributes": {
+          "region": "7"
+        }
+      },
+      "expected": {
+        "experimentId": 517,
+        "variantId": 9001,
+        "variantKey": "control",
+        "payload": {
+          "layout": "classic"
+        },
         "enrolled": false,
         "reason": "targeting"
       }

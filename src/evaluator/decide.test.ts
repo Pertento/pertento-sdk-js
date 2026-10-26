@@ -106,6 +106,20 @@ describe('decide', () => {
     expect(decision).toEqual({ experimentId: 10, ...CONTROL, enrolled: false, reason: 'not-running' });
   });
 
+  test('only Deployed returns the deployed variant; another status with one set is still control', async () => {
+    const paused = experiment({ status: 'Paused' as unknown as 'Running', deployedVariantId: 102 });
+    const decision = await decide({ config: config([paused]), salt: SALT, key: 'new-checkout', visitorId: VISITOR });
+    expect(decision).toEqual({ experimentId: 10, ...CONTROL, enrolled: false, reason: 'not-running' });
+  });
+
+  test('an unknown bucketOn enrols nobody: control, wrong-id-kind, whatever IDs are given', async () => {
+    const odd = experiment({ bucketOn: 'account' as unknown as 'visitor' });
+    for (const identity of [{}, { visitorId: VISITOR }, { id: 'cust-1' }, { visitorId: VISITOR, id: 'cust-1' }]) {
+      const decision = await decide({ config: config([odd]), salt: SALT, key: 'new-checkout', ...identity });
+      expect(decision).toEqual({ experimentId: 10, ...CONTROL, enrolled: false, reason: 'wrong-id-kind' });
+    }
+  });
+
   test('no ID at all: control, no-id', async () => {
     for (const identity of [{}, { visitorId: '' }, { id: '' }]) {
       const decision = await decide({ config: config([experiment({})]), salt: SALT, key: 'new-checkout', ...identity });
@@ -246,6 +260,31 @@ describe('decide', () => {
     const decision = await decide({ config: broken, salt: SALT, key: 'new-checkout', visitorId: VISITOR });
     expect(decision.enrolled === false && decision.reason).toBe('unknown-key');
   });
+
+  test('experiment entries that are not objects are skipped, not a throw', async () => {
+    const junk = [null, 7, 'x', [], experiment({})] as unknown as SdkExperiment[];
+    const decision = await decide({ config: config(junk), salt: SALT, key: 'new-checkout', visitorId: VISITOR });
+    expect(decision).toMatchObject({ experimentId: 10, variantId: 102, enrolled: true });
+    const all = await decideAll({ config: config(junk), salt: SALT, visitorId: VISITOR });
+    expect(Object.keys(all)).toEqual(['new-checkout']);
+  });
+
+  test('variant entries that are not objects are skipped, not a throw', async () => {
+    const variants = [null, 'x', ...experiment({}).variants, 3] as unknown as SdkExperiment['variants'];
+    const running = await decide({
+      config: config([experiment({ variants })]),
+      salt: SALT,
+      key: 'new-checkout',
+      visitorId: VISITOR,
+    });
+    expect(running).toMatchObject({ experimentId: 10, variantId: 102, enrolled: true });
+    const deployed = await decide({
+      config: config([experiment({ variants, status: 'Deployed', deployedVariantId: 999 })]),
+      salt: SALT,
+      key: 'new-checkout',
+    });
+    expect(deployed).toEqual({ experimentId: 10, ...CONTROL, enrolled: false, reason: 'not-running' });
+  });
 });
 
 describe('decideAll', () => {
@@ -262,6 +301,20 @@ describe('decideAll', () => {
     expect(Object.keys(decisions)).toEqual(['new-checkout', 'banner']);
     expect(decisions['new-checkout']?.enrolled).toBe(true);
     expect(decisions['banner']).toMatchObject({ experimentId: 11, enrolled: false, reason: 'wrong-id-kind' });
+  });
+
+  test('returns a null-prototype object, so inherited names are never decisions', async () => {
+    const decisions = await decideAll({
+      config: config([experiment({}), experiment({ id: 11, key: '__proto__' })]),
+      salt: SALT,
+      visitorId: VISITOR,
+    });
+    expect(Object.getPrototypeOf(decisions)).toBeNull();
+    expect(decisions['toString']).toBeUndefined();
+    expect(decisions['hasOwnProperty']).toBeUndefined();
+    // A flag key that happens to be `__proto__` is an ordinary own key, not a prototype swap.
+    expect(Object.keys(decisions)).toEqual(['new-checkout', '__proto__']);
+    expect(decisions['__proto__']).toMatchObject({ experimentId: 11, enrolled: true });
   });
 });
 
