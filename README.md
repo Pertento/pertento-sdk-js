@@ -6,7 +6,7 @@ backend. Runs on Node 20+, Bun, Deno and edge workers (Cloudflare Workers, Verce
 Deno Deploy). It uses only `fetch` and Web Crypto and has no dependencies. It is an ES module
 package: use `import`, not `require` (on Node versions that cannot `require` ES modules).
 
-In the Pertento dashboard these are **Code** experiments with **Assignment: Server-side**:
+In the Pertento dashboard these are **Server-side** experiments with **Assignment: Server**:
 your code renders each variant, and Pertento decides who gets which.
 
 ```sh
