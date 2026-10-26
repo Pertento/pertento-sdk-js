@@ -1,13 +1,20 @@
 import type { Attributes, VariantMap } from './evaluator';
 import type { ErrorReporter, PertentoError, PertentoErrorKind } from './errors';
 import type { FetchLike, FetchResponse } from './http';
+import { isUuid } from './evaluator';
 import { isPlainObject, kindForStatus, serverMessage, thrownFetchError, timedFetch } from './http';
 
 /** How long `track()` waits for the server before giving up. It never retries. */
 export const TRACK_TIMEOUT_MS = 2_000;
 
-/** `raw_data.event` is varchar(100) on the server. */
+/** The longest event name the server stores. */
 export const MAX_EVENT_NAME_LENGTH = 100;
+
+/** The server's limits on who an event is for, checked here so a bad call fails before it is sent. */
+export const MAX_ID_LENGTH = 256;
+export const MAX_ATTRIBUTES = 50;
+export const MAX_ATTRIBUTE_ARRAY_LENGTH = 100;
+export const MAX_ATTRIBUTES_BYTES = 4 * 1024;
 
 /** The most flag keys one `track()` call may name. */
 export const MAX_TRACK_KEYS = 50;
@@ -66,6 +73,37 @@ export function invalidKeysReason(keys: unknown): string | undefined {
   return undefined;
 }
 
+const utf8Bytes = (value: string): number => new TextEncoder().encode(value).length;
+
+type IdentityFields = Pick<TrackOptions, 'visitorId' | 'id' | 'attributes'>;
+
+/**
+ * Why the server would refuse who this event is for, or `undefined` when it would not: a
+ * `visitorId` that is not a UUID, an `id` over 256 characters, or attributes over 50 entries,
+ * 100 items in a list, or 4 KB as JSON.
+ */
+export function invalidIdentityReason({ visitorId, id, attributes }: IdentityFields): string | undefined {
+  if (visitorId !== undefined && !isUuid(visitorId)) {
+    return 'track() visitorId must be a Pertento visitor ID (a UUID), as createVisitorId() makes and the page seed carries';
+  }
+  if (id !== undefined && (typeof id !== 'string' || id.length > MAX_ID_LENGTH)) {
+    return `track() id must be a string of at most ${MAX_ID_LENGTH} characters`;
+  }
+  if (attributes === undefined) return undefined;
+  if (!isPlainObject(attributes)) return 'track() attributes must be an object';
+  const entries = Object.entries(attributes);
+  if (entries.length > MAX_ATTRIBUTES) return `track() attributes may have at most ${MAX_ATTRIBUTES} entries`;
+  for (const [name, value] of entries) {
+    if (Array.isArray(value) && value.length > MAX_ATTRIBUTE_ARRAY_LENGTH) {
+      return `track() attributes.${name} may have at most ${MAX_ATTRIBUTE_ARRAY_LENGTH} items`;
+    }
+  }
+  if (utf8Bytes(JSON.stringify(attributes)) > MAX_ATTRIBUTES_BYTES) {
+    return `track() attributes may be at most ${MAX_ATTRIBUTES_BYTES} bytes as JSON`;
+  }
+  return undefined;
+}
+
 /** The `POST /sdk/events` body. Absent fields stay absent: the server refuses unknown ones, not missing ones. */
 export function trackBody(event: string, { keys, visitorId, id, attributes, data }: TrackOptions): Record<string, unknown> {
   const body: Record<string, unknown> = {
@@ -120,6 +158,8 @@ export async function sendTrack({
   if (!presentString(options.visitorId) && !presentString(options.id)) {
     return fail('bad-request', 'track() needs a visitorId or an id: the conversion is attributed from it');
   }
+  const identityProblem = invalidIdentityReason(options);
+  if (identityProblem !== undefined) return fail('bad-request', identityProblem);
 
   let response: FetchResponse;
   try {

@@ -6,7 +6,7 @@ import { createErrorReporter } from './errors';
 import type { TrackOptions, TrackResult } from './track';
 import { sendTrack, trackBody } from './track';
 
-const KEY = 'psk_live_test';
+const KEY = 'psk_live_test_00000000000000000000000000000000000000';
 const VISITOR = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 const KEYS = ['new-checkout'];
 const CONFIG_404 = { status: 404, body: { error: 'No SDK config for this website' } };
@@ -68,7 +68,7 @@ describe('track()', () => {
     expect(pertento.lastError).toBeNull();
   });
 
-  test('409 (tracking method is not Server (SDK)) resolves ok: false, records lastError, logs once', async () => {
+  test('409 (tracking method is not Server-side) resolves ok: false, records lastError, logs once', async () => {
     const message = 'This website reports conversions from the browser (tracking method ga4).';
     const { pertento, trackCalls } = trackingClient({ status: 409, body: { error: message } });
 
@@ -114,6 +114,28 @@ describe('track()', () => {
     expect((await pertento.track('x'.repeat(101), { keys: KEYS, visitorId: VISITOR })).ok).toBe(false);
     expect(trackCalls()).toHaveLength(0);
     expect(pertento.lastError).toMatchObject({ kind: 'bad-request' });
+  });
+
+  // The server would refuse each of these with a 400; refusing here says why and sends nothing.
+  test.each([
+    ['a visitorId that is not a UUID', { visitorId: 'visitor-42' }],
+    ['an id over 256 characters', { id: 'x'.repeat(257) }],
+    ['more than 50 attributes', { visitorId: VISITOR, attributes: Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`a${i}`, i])) }],
+    ['an attribute list over 100 items', { visitorId: VISITOR, attributes: { tags: Array.from({ length: 101 }, (_, i) => `t${i}`) } }],
+    ['attributes over 4 KB', { visitorId: VISITOR, attributes: { blob: 'x'.repeat(4_100) } }],
+  ])('refuses %s locally, sends nothing', async (_, identity) => {
+    const { pertento, trackCalls } = trackingClient({ status: 200, body: { ok: true, experimentVariantMap: {} } });
+    const result = await pertento.track('purchase', { keys: KEYS, ...identity } as TrackOptions);
+    expect(result.ok).toBe(false);
+    expect(trackCalls()).toHaveLength(0);
+    expect(pertento.lastError).toMatchObject({ source: 'track', kind: 'bad-request' });
+  });
+
+  test('accepts an id of exactly 256 characters and attributes at the limits', async () => {
+    const { pertento, trackCalls } = trackingClient({ status: 200, body: { ok: true, experimentVariantMap: {} } });
+    const attributes = Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`a${i}`, i]));
+    expect((await pertento.track('purchase', { keys: KEYS, id: 'x'.repeat(256), attributes })).ok).toBe(true);
+    expect(trackCalls()).toHaveLength(1);
   });
 
   test.each([

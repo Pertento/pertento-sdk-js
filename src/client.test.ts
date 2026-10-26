@@ -10,7 +10,7 @@ const vectors = rawVectors as unknown as { decisionConfig: SdkConfig; decisionSa
 const CONFIG = vectors.decisionConfig;
 const SALT = vectors.decisionSalt;
 const WEBSITE_ID = CONFIG.websiteId;
-const KEY = 'psk_live_test';
+const KEY = 'psk_live_test_00000000000000000000000000000000000000';
 const VISITOR = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 
 const configReply = (overrides: Record<string, unknown> = {}, etag = '"v1"') => ({
@@ -41,11 +41,39 @@ const client = (fetch: ReturnType<typeof fakeFetch>['fetch'], extra: { backgroun
   createPertento({ websiteId: WEBSITE_ID, serverKey: KEY, baseUrl: 'https://t.example/', fetch, ...extra });
 
 describe('createPertento options', () => {
-  test('throws on a missing key, a bad website ID or a too-short poll interval', () => {
+  test('throws on a missing or malformed key, a bad website ID or a too-short poll interval', () => {
     const { fetch } = fakeFetch(configReply());
     expect(() => createPertento({ websiteId: 0, serverKey: KEY, fetch })).toThrow(TypeError);
     expect(() => createPertento({ websiteId: 1, serverKey: '', fetch })).toThrow(TypeError);
+    // A key cut short, or with stray whitespace from a copy, fails here, not after minutes of 401s.
+    expect(() => createPertento({ websiteId: 1, serverKey: KEY.slice(0, -1), fetch })).toThrow(TypeError);
+    expect(() => createPertento({ websiteId: 1, serverKey: ` ${KEY}`, fetch })).toThrow(TypeError);
     expect(() => createPertento({ websiteId: 1, serverKey: KEY, pollIntervalMs: 100, fetch })).toThrow(TypeError);
+  });
+});
+
+describe('visitor IDs', () => {
+  // The server and the page seed refuse a visitorId that is not a UUID, so the SDK must not
+  // enrol someone on one: the header it often comes from is client input.
+  test('a visitorId that is not a UUID is ignored when deciding', async () => {
+    const { fetch } = fakeFetch(configReply());
+    const pertento = client(fetch);
+    await pertento.ready();
+    const decision = await pertento.getVariant('new-checkout', { visitorId: 'not-a-uuid' });
+    expect(decision.enrolled).toBe(false);
+    expect((await pertento.getAll({ visitorId: 'not-a-uuid' }))['new-checkout']?.enrolled).toBe(false);
+    pertento.close();
+  });
+
+  test('an uppercase visitorId decides as its lowercase form, as the server stores it', async () => {
+    const { fetch } = fakeFetch(configReply());
+    const pertento = client(fetch);
+    await pertento.ready();
+    const upper = await pertento.getVariant('new-checkout', { visitorId: VISITOR.toUpperCase() });
+    const lower = await pertento.getVariant('new-checkout', { visitorId: VISITOR });
+    expect(upper).toEqual(lower);
+    expect(pertento.seedScript([lower], VISITOR.toUpperCase())).toContain(VISITOR);
+    pertento.close();
   });
 });
 
@@ -76,7 +104,7 @@ describe('first load', () => {
     pertento.close();
   });
 
-  test('ready() rejects after its timeout, and the client keeps working when the config arrives', async () => {
+  test('ready() resolves false after its timeout, never rejects, and the client keeps working when the config arrives', async () => {
     let answer: (() => void) | undefined;
     const { fetch } = fakeFetch(
       () =>
@@ -85,13 +113,31 @@ describe('first load', () => {
         }),
     );
     const pertento = client(fetch);
-    await expect(pertento.ready(20)).rejects.toThrow('no config within 20 ms');
+    expect(await pertento.ready(20)).toBe(false);
 
     answer?.();
     await tick();
     expect((await pertento.getVariant('new-checkout', { visitorId: VISITOR })).enrolled).toBe(true);
-    await pertento.ready();
+    expect(await pertento.ready()).toBe(true);
     pertento.close();
+  });
+
+  // A failed load must not hold a caller for the whole timeout when no retry could land in it.
+  test('ready() gives up as soon as a load fails and the next attempt is past its deadline', async () => {
+    const { fetch } = fakeFetch({ status: 503, body: { error: 'starting' }, headers: { 'Retry-After': '60' } });
+    const pertento = client(fetch);
+    const started = Date.now();
+    expect(await pertento.ready(5_000)).toBe(false);
+    expect(Date.now() - started).toBeLessThan(1_000);
+    pertento.close();
+  });
+
+  test('without a background timer, ready() gives up as soon as a load fails', async () => {
+    const { fetch } = fakeFetch({ status: 500, body: { error: 'boom' } });
+    const pertento = client(fetch, { background: false });
+    const started = Date.now();
+    expect(await pertento.ready(5_000)).toBe(false);
+    expect(Date.now() - started).toBeLessThan(1_000);
   });
 });
 
@@ -153,20 +199,22 @@ describe('refresh', () => {
   test('a network failure is recorded as such', async () => {
     const { fetch } = fakeFetch(new TypeError('fetch failed'));
     const pertento = client(fetch);
-    await expect(pertento.ready(50)).rejects.toThrow('fetch failed');
+    expect(await pertento.ready(50)).toBe(false);
     expect(pertento.lastError).toMatchObject({ source: 'config', kind: 'network' });
+    expect(pertento.lastError?.message).toContain('fetch failed');
     pertento.close();
   });
 
-  test('401 past the grace window stops polling, rejects ready() at once and logs twice', async () => {
+  test('401 past the grace window stops polling, resolves ready() false at once and logs twice', async () => {
     const { fetch, calls } = fakeFetch({ status: 401, body: { error: 'Invalid server key' } });
     const pertento = client(fetch, { background: false });
-    await expect(pertento.ready(50)).rejects.toThrow('Invalid server key');
+    expect(await pertento.ready(50)).toBe(false);
+    expect(pertento.lastError?.message).toContain('Invalid server key');
 
     setSystemTime(new Date(Date.now() + 10 * 60_000));
     expect(await pertento.getVariant('new-checkout', { visitorId: VISITOR })).toEqual(unknownKey);
     await tick();
-    await expect(pertento.ready()).rejects.toThrow('stopped');
+    expect(await pertento.ready()).toBe(false);
 
     setSystemTime(new Date(Date.now() + 20 * 60_000));
     await pertento.getVariant('new-checkout', { visitorId: VISITOR });
@@ -197,7 +245,7 @@ describe('refresh', () => {
   test("refuses another website's config", async () => {
     const { fetch } = fakeFetch(configReply({ websiteId: WEBSITE_ID + 1 }));
     const pertento = client(fetch);
-    await expect(pertento.ready(50)).rejects.toThrow();
+    expect(await pertento.ready(50)).toBe(false);
     expect(pertento.lastError).toMatchObject({ kind: 'website-mismatch' });
     expect(await pertento.getVariant('new-checkout', { visitorId: VISITOR })).toEqual(unknownKey);
     pertento.close();
@@ -271,11 +319,11 @@ describe('background timer', () => {
     expect(poller.current()?.etag).toBe('"v1"');
   });
 
-  test('close() rejects a pending ready()', async () => {
+  test('close() resolves a pending ready() false at once', async () => {
     const { fetch } = hangingFetch();
     const pertento = client(fetch);
     const ready = pertento.ready(5_000);
     pertento.close();
-    await expect(ready).rejects.toThrow();
+    expect(await ready).toBe(false);
   });
 });

@@ -5,7 +5,7 @@ import type { SeedScriptOptions } from './seed-script';
 import type { TrackOptions, TrackResult } from './track';
 import { createConfigPoller } from './config-poller';
 import { createErrorReporter } from './errors';
-import { createVisitorId, decide, decideAll } from './evaluator';
+import { createVisitorId, decide, decideAll, isUuid } from './evaluator';
 import { DEFAULT_BASE_URL, globalFetch } from './http';
 import { seedScript } from './seed-script';
 import { sendTrack } from './track';
@@ -43,13 +43,16 @@ export type Identity = DecideIdentity;
 
 export type Pertento = {
   /**
-   * Resolves once the first config is loaded. Rejects after `timeoutMs` (default 5000), or at
-   * once if polling has stopped. The client keeps working either way, and keeps trying unless
-   * polling stopped: until a config arrives every flag resolves to control with reason
+   * Resolves `true` once the first config is loaded, and `false` when none arrives within
+   * `timeoutMs` (default 5000). It never rejects, so `await pertento.ready()` is safe at
+   * startup: a slow or unreachable Pertento, or a refused key, must not stop your server.
+   * It gives up early when no further attempt could land in time, and at once if polling has
+   * stopped; `lastError` says why. The client keeps working either way, and keeps trying
+   * unless polling stopped: until a config arrives every flag resolves to control with reason
    * `unknown-key`. A refused key (401) is retried for 2 minutes, since a key just created takes
    * up to about 30 seconds to become active; only then does polling stop for good.
    */
-  ready: (timeoutMs?: number) => Promise<void>;
+  ready: (timeoutMs?: number) => Promise<boolean>;
   /**
    * The variant of one flag for one person. Never rejects: without a config, or for a key no
    * experiment has, it resolves to `{ enrolled: false, reason: 'unknown-key', variantKey: null, ... }`.
@@ -70,7 +73,7 @@ export type Pertento = {
   ) => string;
   /**
    * Reports a conversion from your backend to `POST /sdk/events`. Needs the website's tracking
-   * method set to "Server (SDK)". `keys` is required: the flag keys this person was decided on
+   * method set to "Server-side". `keys` is required: the flag keys this person was decided on
    * (what you passed to `getVariant` or `getAll`), and `attributes` must be the ones used then.
    * At most once: no retry, 2 s timeout. Never rejects; missing or invalid `keys` sends nothing
    * and resolves `ok: false`. Check `ok` on the result, or `lastError`.
@@ -94,12 +97,30 @@ const unknownKey = (): NotEnrolledDecision => ({
   reason: 'unknown-key',
 });
 
+/** A server key as the dashboard issues it. */
+const SERVER_KEY_PATTERN = /^psk_live_[A-Za-z0-9_-]{43}$/;
+
+/**
+ * The identity as the evaluator should see it: a `visitorId` that is not a UUID is left out,
+ * as the server and the page seed would refuse it, so the decision says `no-id` (or uses `id`)
+ * rather than enrolling someone the server will not recognise. A valid one is lowercased, as
+ * the server stores it.
+ */
+function cleanIdentity(identity: Identity): Identity {
+  const { visitorId, ...rest } = identity;
+  if (visitorId === undefined) return identity;
+  return isUuid(visitorId) ? { ...rest, visitorId: visitorId.toLowerCase() } : rest;
+}
+
 function checkOptions({ websiteId, serverKey, pollIntervalMs }: PertentoOptions): void {
   if (!Number.isSafeInteger(websiteId) || websiteId <= 0) {
     throw new TypeError('createPertento: websiteId must be a positive integer');
   }
   if (typeof serverKey !== 'string' || serverKey.length === 0) {
     throw new TypeError('createPertento: serverKey is required (a psk_live_ key from the dashboard)');
+  }
+  if (!SERVER_KEY_PATTERN.test(serverKey)) {
+    throw new TypeError('createPertento: serverKey is not a server key; copy the whole psk_live_ key from the dashboard');
   }
   if (pollIntervalMs !== undefined && !(Number.isFinite(pollIntervalMs) && pollIntervalMs >= MIN_POLL_INTERVAL_MS)) {
     throw new TypeError(`createPertento: pollIntervalMs must be at least ${MIN_POLL_INTERVAL_MS}`);
@@ -150,7 +171,7 @@ export function createPertento(options: PertentoOptions): Pertento {
       const loaded = poller.current();
       if (!loaded || typeof key !== 'string') return unknownKey();
       try {
-        return await decide({ ...identity, config: loaded.config, salt: loaded.salt, key });
+        return await decide({ ...cleanIdentity(identity), config: loaded.config, salt: loaded.salt, key });
       } catch (error) {
         evaluationFailed(error);
         return unknownKey();
@@ -162,7 +183,7 @@ export function createPertento(options: PertentoOptions): Pertento {
       const loaded = poller.current();
       if (!loaded) return {};
       try {
-        return await decideAll({ ...identity, config: loaded.config, salt: loaded.salt });
+        return await decideAll({ ...cleanIdentity(identity), config: loaded.config, salt: loaded.salt });
       } catch (error) {
         evaluationFailed(error);
         return {};

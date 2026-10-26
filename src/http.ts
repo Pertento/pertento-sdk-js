@@ -58,13 +58,18 @@ export function thrownFetchError(error: unknown, timeoutMs: number): { kind: Per
 
 type TimedFetchParams = { fetch: FetchLike; url: string; init: Omit<FetchInit, 'signal'>; timeoutMs: number };
 
-/** One fetch with its own timeout. The timer is always cleared, so it never holds a process open. */
+/**
+ * One fetch with its own timeout. The timer is always cleared, and unref'd where the runtime
+ * allows it, so a request that hangs never holds a Node process open on its own.
+ */
 export async function timedFetch({ fetch, url, init, timeoutMs }: TimedFetchParams): Promise<FetchResponse> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer: unknown = setTimeout(() => controller.abort(), timeoutMs);
+  const unref = typeof timer === 'object' && timer !== null ? (timer as { unref?: unknown }).unref : undefined;
+  if (typeof unref === 'function') unref.call(timer);
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } finally {
-    clearTimeout(timer);
+    clearTimeout(timer as number);
   }
 }

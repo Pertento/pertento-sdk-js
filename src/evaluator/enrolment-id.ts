@@ -4,7 +4,7 @@ import { formatUuid } from './uuid';
 export type DeriveEnrolmentIdParams = { salt: string; customerId: string };
 
 /**
- * The UUID a customer-ID experiment enrols under, so `visitor_enrolments` never holds the
+ * The UUID a customer-ID experiment enrols under, so Pertento never receives or stores the
  * customer's own ID. The first 16 bytes of HMAC-SHA256(salt, "id:" + customerId), with
  * the version nibble set to 8 and the variant bits to 10 (an RFC 9562 version 8 UUID).
  *

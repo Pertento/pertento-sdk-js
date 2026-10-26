@@ -27,7 +27,7 @@ const stubFetch = async (url, init) => {
 
 const pertento = createPertento({
   websiteId: config.websiteId,
-  serverKey: 'psk_live_smoke',
+  serverKey: 'psk_live_test_00000000000000000000000000000000000000',
   baseUrl: 'https://tracking.example.test/',
   fetch: stubFetch,
 });

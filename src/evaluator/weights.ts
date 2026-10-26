@@ -28,7 +28,7 @@ export function sortById(variants: readonly SdkVariant[]): SdkVariant[] {
  *
  * The bucket is scaled to the actual weight total first, floor(bucket * total / 10000),
  * so a stored distribution that does not sum to 10000 still splits proportionally
- * (the browser runtime's pickRandomVariant normalises the same way). With the usual
+ * (the Pertento browser snippet normalises the same way). With the usual
  * total of 10000 the scaled point is the bucket itself.
  *
  * Returns null only when no variant carries any weight.

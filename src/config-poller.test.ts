@@ -29,7 +29,7 @@ function fakeClockPoller(...script: FakeReply[]) {
   const errors = createErrorReporter({ now: () => clock, log: (line) => logs.push(line) });
   const poller = createConfigPoller({
     baseUrl: 'https://t.example',
-    serverKey: 'psk_live_test',
+    serverKey: 'psk_live_test_00000000000000000000000000000000000000',
     websiteId: CONFIG.websiteId,
     fetch,
     pollIntervalMs: POLL_INTERVAL_MS,
@@ -109,12 +109,12 @@ describe('401 grace window', () => {
     for (let elapsed = 30_000; elapsed < UNAUTHORIZED_GRACE_MS; elapsed += 30_000) await advance(30_000);
     expect(calls).toHaveLength(4);
     // Still inside the window: retrying, not stopped.
-    await expect(poller.ready(1)).rejects.toThrow('no config within');
+    expect(await poller.ready(1)).toBe(false);
 
     await advance(30_000);
     expect(calls).toHaveLength(5);
     expect(errors.last()?.message).toContain('Config polling has stopped');
-    await expect(poller.ready(1_000)).rejects.toThrow('stopped');
+    expect(await poller.ready(1_000)).toBe(false);
 
     await advance(10 * 60_000);
     await poller.refresh();
@@ -210,7 +210,7 @@ describe('503 and 429', () => {
     const { fetch, calls } = fakeFetch({ status: 503, headers: { 'Retry-After': '1' } }, CONFIG_200);
     const poller = createConfigPoller({
       baseUrl: 'https://t.example',
-      serverKey: 'psk_live_test',
+      serverKey: 'psk_live_test_00000000000000000000000000000000000000',
       websiteId: CONFIG.websiteId,
       fetch,
       pollIntervalMs: 60_000,

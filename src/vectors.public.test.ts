@@ -21,7 +21,7 @@ describe('spec/vectors.json through the public API', async () => {
     body: { ...vectors.decisionConfig, salt: vectors.decisionSalt },
     headers: { etag: '"vectors"' },
   });
-  const pertento = createPertento({ websiteId: vectors.decisionConfig.websiteId, serverKey: 'psk_live_x', fetch, background: false });
+  const pertento = createPertento({ websiteId: vectors.decisionConfig.websiteId, serverKey: 'psk_live_test_00000000000000000000000000000000000000', fetch, background: false });
   await pertento.ready();
 
   test.each(vectors.decisions)('getVariant: $name', async ({ input: { key, ...identity }, expected }) => {
