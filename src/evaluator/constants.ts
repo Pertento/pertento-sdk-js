@@ -1,8 +1,4 @@
-/**
- * Duplicated from `definitions` on purpose, not imported: the SDK bundle inlines this
- * package and must not pull the whole definitions package in with it. A later PR
- * (the tracking server's /sdk work) adds a test asserting the two copies agree.
- */
+/** Constants the evaluator shares with the Pertento tracking server; both must agree. */
 
 /** The `SdkConfig.version` this evaluator understands. */
 export const SDK_CONFIG_VERSION = 1;

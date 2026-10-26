@@ -6,7 +6,7 @@ import { createPertento, type Decision, type PertentoError, type TrackResult } f
 export async function example(): Promise<string> {
   const pertento = createPertento({
     websiteId: 1,
-    serverKey: 'psk_live_example',
+    serverKey: 'psk_live_test_00000000000000000000000000000000000000',
     pollIntervalMs: 30_000,
     fetch: globalThis.fetch,
   });

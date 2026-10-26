@@ -1,5 +1,5 @@
 import type { Decision } from './evaluator';
-import { buildSeed, serializeSeed } from './evaluator';
+import { buildSeed, isUuid, serializeSeed } from './evaluator';
 
 export type SeedScriptOptions = {
   /** Your Content-Security-Policy nonce, written as the script's `nonce` attribute. */
@@ -20,7 +20,9 @@ export function seedScript(
   options: SeedScriptOptions = {},
 ): string {
   const list = Array.isArray(decisions) ? decisions : Object.values(decisions as Record<string, Decision>);
-  const json = serializeSeed(buildSeed(list, visitorId));
+  // Lowercased as the server stores it, so the browser keeps the same ID the server enrols.
+  const seededId = visitorId !== undefined && isUuid(visitorId) ? visitorId.toLowerCase() : visitorId;
+  const json = serializeSeed(buildSeed(list, seededId));
   const nonce = options.nonce === undefined ? '' : ` nonce="${escapeAttribute(options.nonce)}"`;
   return `<script${nonce}>window.PertentoSeed=${json};</script>`;
 }

@@ -9,7 +9,7 @@ export type PertentoErrorKind =
   | 'not-found'
   /** Too many requests for this server key (429). */
   | 'rate-limited'
-  /** The website's tracking method is not "Server (SDK)", so `track()` was refused (409). */
+  /** The website's tracking method is not "Server-side", so `track()` was refused (409). */
   | 'wrong-tracking-method'
   /** The request was refused as malformed (400), or `track()` was called without an ID or event name. */
   | 'bad-request'

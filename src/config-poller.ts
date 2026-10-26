@@ -14,8 +14,12 @@ export type ConfigPoller = {
   refresh: () => Promise<void>;
   /** Starts a non-awaited refresh when the last attempt is older than the poll interval. */
   refreshIfStale: () => void;
-  /** Resolves once a config is held; rejects after `timeoutMs`, or at once if polling has stopped. */
-  ready: (timeoutMs: number) => Promise<void>;
+  /**
+   * Resolves `true` once a config is held. Resolves `false`, never rejects, when none can arrive
+   * within `timeoutMs`: at the deadline, at once if polling has stopped, or as soon as an attempt
+   * fails and the next one could not land before the deadline.
+   */
+  ready: (timeoutMs: number) => Promise<boolean>;
   /** Stops the timer and any later refresh. The last config stays usable. */
   close: () => void;
 };
@@ -66,7 +70,8 @@ export function parseConfigBody(body: unknown, websiteId: number): ParsedConfig 
   return { ok: true, config: config as SdkConfig, salt };
 }
 
-type Waiter = { resolve: () => void; reject: (error: Error) => void };
+/** A pending `ready()`: when it gives up, and how it settles. */
+type Waiter = { deadline: number; settle: (ready: boolean) => void };
 
 /**
  * How long a run of 401s is retried before polling stops. The tracking server can briefly
@@ -138,16 +143,33 @@ export function createConfigPoller(params: CreateConfigPollerParams): ConfigPoll
   let firstUnauthorizedAt: number | null = null;
   const waiters = new Set<Waiter>();
 
-  const stopError = (): Error =>
-    new Error(`[pertento] config polling stopped: ${errors.last()?.message ?? 'the client was closed'}`);
+  /**
+   * When the next request can go out on its own, or Infinity when nothing will make one: without
+   * a background timer (edge workers) only a later call does, and that is not this one.
+   */
+  const nextAttemptAt = (): number => {
+    if (stopped || closed || !background || timer === null) return Infinity;
+    return retryAt ?? lastAttemptAt + pollIntervalMs;
+  };
 
+  /**
+   * Settles what can be settled now: every waiter `true` once a config is held, and otherwise
+   * `false` for each waiter whose deadline comes before the next attempt could, so a failed load
+   * does not hold a caller for its whole timeout.
+   */
   const settleWaiters = (): void => {
-    if (state) {
-      for (const waiter of waiters) waiter.resolve();
+    if (state || stopped || closed) {
+      for (const waiter of waiters) waiter.settle(!!state);
       waiters.clear();
-    } else if (stopped || closed) {
-      for (const waiter of waiters) waiter.reject(stopError());
-      waiters.clear();
+      return;
+    }
+    if (inFlight) return;
+    const next = nextAttemptAt();
+    for (const waiter of waiters) {
+      if (next >= waiter.deadline) {
+        waiter.settle(false);
+        waiters.delete(waiter);
+      }
     }
   };
 
@@ -300,28 +322,26 @@ export function createConfigPoller(params: CreateConfigPollerParams): ConfigPoll
     if (due) void refresh();
   };
 
-  const ready = (timeoutMs: number): Promise<void> => {
-    if (state) return Promise.resolve();
-    if (stopped || closed) return Promise.reject(stopError());
+  const ready = (timeoutMs: number): Promise<boolean> => {
+    if (state) return Promise.resolve(true);
+    if (stopped || closed) return Promise.resolve(false);
 
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<boolean>((resolve) => {
       const waiter: Waiter = {
-        resolve: () => {
-          clearTimeout(deadline);
-          resolve();
-        },
-        reject: (error) => {
-          clearTimeout(deadline);
-          reject(error);
+        deadline: now() + timeoutMs,
+        settle: (ready) => {
+          clearTimeout(timeout);
+          resolve(ready);
         },
       };
-      const deadline = setTimeout(() => {
+      const timeout = setTimeout(() => {
         waiters.delete(waiter);
-        const reason = errors.last()?.message ?? 'no response yet';
-        reject(new Error(`[pertento] no config within ${timeoutMs} ms (${reason}). The client keeps trying.`));
+        resolve(false);
       }, timeoutMs);
       waiters.add(waiter);
       void refresh();
+      // When no request went out (one is not due yet), settle now if none can land in time.
+      settleWaiters();
     });
   };
 

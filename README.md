@@ -3,9 +3,10 @@
 The Pertento server-side SDK for JavaScript and TypeScript. Decide which variant a visitor
 sees on your server, hand that decision to the page, and report conversions from your
 backend. Runs on Node 20+, Bun, Deno and edge workers (Cloudflare Workers, Vercel Edge,
-Deno Deploy). It uses only `fetch` and Web Crypto and has no dependencies.
+Deno Deploy). It uses only `fetch` and Web Crypto and has no dependencies. It is an ES module
+package: use `import`, not `require` (on Node versions that cannot `require` ES modules).
 
-In the Pertento dashboard these are **Code** experiments with **Assignment: Server (SDK)**:
+In the Pertento dashboard these are **Code** experiments with **Assignment: Server-side**:
 your code renders each variant, and Pertento decides who gets which.
 
 ```sh
@@ -21,7 +22,7 @@ npm install @pertentoai/sdk
 - **A server key** (`psk_live_...`) from the dashboard (Websites, the key button on the website's
   row). It is shown once, and it is a secret:
   keep it in an environment variable on your server and never send it to a browser.
-- **Tracking method "Server (SDK)"** (Websites, settings), only if you want to report conversions from your backend
+- **Tracking method "Server-side"** (Websites, settings), only if you want to report conversions from your backend
   with `track()`. See [Reporting conversions](#reporting-conversions-from-your-backend).
 
 ## Quick start
@@ -37,8 +38,12 @@ const pertento = createPertento({
   serverKey: process.env.PERTENTO_SERVER_KEY!,
 });
 
-await pertento.ready(); // optional: waits up to 5 s for the first config
+await pertento.ready(); // optional: waits up to 5 s for the first config; never throws
 ```
+
+`ready()` resolves `true` once the config is loaded and `false` if it is not loaded in time. It
+never rejects, so a slow network or a refused key at startup cannot stop your server: decisions
+fall back to control until the config arrives, and `pertento.lastError` says why.
 
 > **Required: persist the visitor ID and send it back.** Pertento sets no cookies, so your
 > server has to remember who the visitor is. Store the visitor ID the first time you mint it
@@ -89,7 +94,9 @@ Pertento sets **no cookies**. Where you keep the visitor ID between requests is 
   after that.
 - **A header from your own frontend.** The snippet exposes the browser's ID as
   `window.Pertento.visitorId`; a single-page app can send it on its API calls, for example as
-  `x-pertento-visitor-id`, and your server passes it to `getVariant`.
+  `x-pertento-visitor-id`, and your server passes it to `getVariant`. A header is client input:
+  a value that is not a Pertento visitor ID (a UUID) is ignored, and the decision says `no-id`,
+  so mint a new ID for that visitor rather than passing it on.
 
 Once the page has been seeded, the browser keeps the seeded visitor ID. A returning visitor
 whose server session is new gets a new visitor ID and counts as a new visitor.
@@ -178,7 +185,7 @@ server needs no extra bookkeeping. The rules:
   rules from the attribution although the person was enrolled in it.
 
 - **One reporter per website.** `track()` works only when the website's tracking method is
-  **Server (SDK)**. In that mode the browser snippet reports nothing, so conversions are never
+  **Server-side**. In that mode the browser snippet reports nothing, so conversions are never
   counted twice. In any other mode the server answers 409 and `track()` resolves
   `{ ok: false, error: { kind: 'wrong-tracking-method' } }`.
 - **Only for visitors the browser has enrolled.** A conversion counts against the visitors who
@@ -201,11 +208,12 @@ next succeeds.
 | --- | --- |
 | Config request fails (network, 5xx) | The last good config keeps being used; the next poll tries again. |
 | 503 or 429, with `Retry-After` | The last good config keeps being used; the next request waits as long as `Retry-After` asks (1 second to 5 minutes), even past a poll. The tracking server answers 503 while it starts up. |
-| Server key refused (401) | Retried with backoff (2 seconds, doubling to 30) for 2 minutes, since a key just created takes up to about 30 seconds to become active. Any other answer ends the run. After 2 minutes of nothing but 401s, polling stops for good and `ready()` rejects: check the key, or create a new one and restart. The last good config, if any, keeps being used. |
+| Server key refused (401) | Retried with backoff (2 seconds, doubling to 30) for 2 minutes, since a key just created takes up to about 30 seconds to become active. Any other answer ends the run. After 2 minutes of nothing but 401s, polling stops for good and `ready()` resolves `false` at once: check the key, or create a new one and restart. The last good config, if any, keeps being used. |
 | Config of a newer version than this SDK understands | Treated as no config (every key `unknown-key`). Upgrade the package. |
 | Server key belongs to another website than `websiteId` | Treated as no config. Fix the settings. |
 
-`createPertento` itself throws a `TypeError` for invalid options (missing key, bad website ID).
+`createPertento` itself throws a `TypeError` for invalid options (a missing or malformed key, a
+bad website ID).
 
 ## How fresh the config is
 
@@ -220,7 +228,8 @@ config costs an empty 304. In Node the timer is unref'd and never keeps your pro
 
 Request-scoped runtimes keep no timers between requests, and some forbid network calls outside
 a request. Create the client at module scope with `background: false`, and await `ready()` in
-the handler (it returns at once after the first load):
+the handler with a short timeout (it returns at once after the first load, and at once after a
+failed one, so a Pertento outage costs a page at most that timeout):
 
 ```ts
 import { createPertento } from '@pertentoai/sdk';
@@ -234,7 +243,7 @@ export default {
       serverKey: env.PERTENTO_SERVER_KEY,
       background: false,
     });
-    await pertento.ready().catch(() => {}); // no config yet: decisions fall back to control
+    await pertento.ready(1000); // false without a config: decisions fall back to control
 
     const visitorId = request.headers.get('x-pertento-visitor-id') ?? pertento.createVisitorId();
     const decision = await pertento.getVariant('new-checkout', { visitorId });
@@ -259,7 +268,7 @@ createPertento({
   background?: boolean,     // default true; false for edge workers
   fetch?: typeof fetch,     // e.g. a proxy-aware fetch, or a stub in tests
 }) => {
-  ready(timeoutMs = 5000): Promise<void>,
+  ready(timeoutMs = 5000): Promise<boolean>, // never rejects
   getVariant(key: string, identity?: { visitorId?, id?, attributes? }): Promise<Decision>,
   getAll(identity?): Promise<Record<string, Decision>>,
   createVisitorId(): string,
@@ -320,8 +329,9 @@ Write `seed` into the page as `window.PertentoSeed`, escaping `<`, `>`, `&`, U+2
 
 ### `POST /sdk/events`
 
-Reports conversions; the same rules as `track()` (Server (SDK) tracking method, at most once,
-no retries). 600 requests a minute per key, shared with `/sdk/decide`.
+Reports conversions; the same rules as `track()` (Server-side tracking method, at most once,
+no retries). 600 requests a minute per key, a budget of its own, so a burst of decisions cannot
+crowd out the conversions reported in the same minute.
 
 ```sh
 curl https://tracking.pertento.ai/sdk/events \
