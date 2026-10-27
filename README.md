@@ -222,10 +222,12 @@ decisions, so a deployed decision is reported whether or not you seed the page.
 
 You do not call anything to make this happen. How it works:
 
-- **Once per person.** Each experiment and enrolment ID (`decision.enrolAs` for a customer ID
-  experiment, the visitor ID otherwise) is sent once per client. The client remembers the last
-  10,000 it has seen; Pertento also ignores repeats, so a person reported by two of your servers
-  is still counted once.
+- **Once per visit.** Each experiment and enrolment ID (`decision.enrolAs` for a customer ID
+  experiment, the visitor ID otherwise) is sent once while that person keeps coming back within
+  25 minutes, and again after they have been away longer, so a later visit counts as a new
+  session. The client remembers the last 10,000 it has seen. Pertento counts each person once in
+  your results however often they are reported, so a person reported by two of your servers is
+  still one visitor.
 - **Batched.** Exposures wait in a queue and are sent within 2 seconds, or at once when 100 are
   waiting. In Node the timer is unref'd and never keeps your process alive.
 - **Never in the way of a decision.** `getVariant` and `getAll` return before anything is sent,

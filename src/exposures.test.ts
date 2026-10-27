@@ -6,7 +6,12 @@ import { fakeFetch, hangingFetch, tick } from '../test/fake-fetch';
 import { createPertento } from './client';
 import { createErrorReporter } from './errors';
 import { deriveEnrolmentId } from './evaluator';
-import { createExposureReporter, MAX_EXPOSURES_PER_REQUEST, REPORTED_EXPOSURES_LIMIT } from './exposures';
+import {
+  createExposureReporter,
+  MAX_EXPOSURES_PER_REQUEST,
+  REPORTED_EXPOSURE_TTL_MS,
+  REPORTED_EXPOSURES_LIMIT,
+} from './exposures';
 import { seedScript } from './seed-script';
 
 const vectors = rawVectors as unknown as { decisionConfig: SdkConfig; decisionSalt: string };
@@ -28,7 +33,13 @@ const bodyOf = (call: FakeCall): unknown => JSON.parse(call.init.body ?? 'null')
 const exposuresOf = (call: FakeCall): Array<{ experimentId: number; variantId: number; enrolAs: string }> =>
   (bodyOf(call) as { exposures: Array<{ experimentId: number; variantId: number; enrolAs: string }> }).exposures;
 
-type ReporterOptions = { background?: boolean; enabled?: boolean; flushIntervalMs?: number; reportedLimit?: number };
+type ReporterOptions = {
+  background?: boolean;
+  enabled?: boolean;
+  flushIntervalMs?: number;
+  reportedLimit?: number;
+  now?: () => number;
+};
 
 /** A reporter on its own, answering every send from `script`. */
 function reporter(options: ReporterOptions = {}, ...script: Parameters<typeof fakeFetch>) {
@@ -44,6 +55,7 @@ function reporter(options: ReporterOptions = {}, ...script: Parameters<typeof fa
     enabled: options.enabled ?? true,
     ...(options.flushIntervalMs === undefined ? {} : { flushIntervalMs: options.flushIntervalMs }),
     ...(options.reportedLimit === undefined ? {} : { reportedLimit: options.reportedLimit }),
+    ...(options.now === undefined ? {} : { now: options.now }),
   });
   const sent = () => calls.flatMap(exposuresOf);
   return { exposures, errors, calls, logs, sent };
@@ -622,5 +634,33 @@ describe('decisions never wait for the network', () => {
     expect(() => exposures.record(decisions, VISITOR)).not.toThrow();
     await exposures.flush();
     expect(errors.last()).toMatchObject({ source: 'exposures', kind: 'network' });
+  });
+});
+
+describe('a later visit is reported again', () => {
+  test('a person seen again within 25 minutes is sent once; after longer away, again', async () => {
+    let now = 1_000_000;
+    const { exposures, sent } = reporter({ now: () => now });
+    exposures.record([enrolled(501)], VISITOR);
+    await exposures.flush();
+    now += 10 * 60_000;
+    exposures.record([enrolled(501)], VISITOR);
+    await exposures.flush();
+    expect(sent()).toHaveLength(1);
+
+    // Each sighting restarts the time: still within one visit.
+    now += 20 * 60_000;
+    exposures.record([enrolled(501)], VISITOR);
+    await exposures.flush();
+    expect(sent()).toHaveLength(1);
+
+    now += REPORTED_EXPOSURE_TTL_MS;
+    exposures.record([enrolled(501)], VISITOR);
+    await exposures.flush();
+    expect(sent()).toHaveLength(2);
+  });
+
+  test('the window is shorter than the server session, so a returning visit can open a new one', () => {
+    expect(REPORTED_EXPOSURE_TTL_MS).toBeLessThan(30 * 60_000);
   });
 });

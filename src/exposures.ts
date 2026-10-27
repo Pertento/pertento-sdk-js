@@ -12,6 +12,12 @@ export const EXPOSURE_FLUSH_INTERVAL_MS = 2_000;
 export const EXPOSURE_TIMEOUT_MS = 2_000;
 /** How many experiment and enrolment ID pairs a client remembers as reported. */
 export const REPORTED_EXPOSURES_LIMIT = 10_000;
+/**
+ * How long a pair stays remembered after it was last seen. Shorter than the server's 30 minute
+ * session window, so a person who comes back later is reported again and the server can count
+ * the new session, while one who keeps coming back within it is sent once.
+ */
+export const REPORTED_EXPOSURE_TTL_MS = 25 * 60_000;
 
 /** One enrolled decision, or one served from a Deployed experiment, as `POST /sdk/exposures` takes it. */
 export type Exposure = { experimentId: number; variantId: number; enrolAs: string };
@@ -53,6 +59,10 @@ export type CreateExposureReporterParams = {
   flushIntervalMs?: number;
   requestTimeoutMs?: number;
   reportedLimit?: number;
+  /** How long a reported pair is remembered after it was last seen. */
+  reportedTtlMs?: number;
+  /** Injected in tests. */
+  now?: () => number;
 };
 
 /**
@@ -119,21 +129,29 @@ export async function deployedEnrolmentIds({
   return ids;
 }
 
+type RecentSetParams = { limit: number; ttlMs: number; now: () => number };
+
 /**
- * A set that holds at most `limit` keys. Adding one more forgets the key seen longest ago,
- * so a long-running process remembers recent visitors without its memory growing.
+ * A set that holds at most `limit` keys, each for `ttlMs` after it was last seen. Adding one more
+ * than the limit forgets the key seen longest ago, so a long-running process remembers recent
+ * visitors without its memory growing, and forgets a visitor once they have been away long
+ * enough to start a new session.
  */
-function boundedSet(limit: number): { has: (key: string) => boolean; add: (key: string) => void } {
-  const keys = new Set<string>();
+function recentSet({ limit, ttlMs, now }: RecentSetParams): { has: (key: string) => boolean; add: (key: string) => void } {
+  const seenAt = new Map<string, number>();
   return {
-    has: (key) => keys.has(key),
+    has: (key) => {
+      const at = seenAt.get(key);
+      return at !== undefined && now() - at < ttlMs;
+    },
     add: (key) => {
-      // Re-adding moves the key to the newest end, so a visitor seen often is the last forgotten.
-      keys.delete(key);
-      keys.add(key);
-      if (keys.size <= limit) return;
-      const oldest = keys.values().next();
-      if (!oldest.done) keys.delete(oldest.value);
+      // Re-adding moves the key to the newest end and restarts its time, so a visitor seen often
+      // is the last forgotten.
+      seenAt.delete(key);
+      seenAt.set(key, now());
+      if (seenAt.size <= limit) return;
+      const oldest = seenAt.keys().next();
+      if (!oldest.done) seenAt.delete(oldest.value);
     },
   };
 }
@@ -143,8 +161,9 @@ function boundedSet(limit: number): { has: (key: string) => boolean; add: (key: 
  * only on the server enrols its visitors as the browser's snippet would. Decisions served from a
  * Deployed experiment are reported too, and count as a deployed variant's sessions.
  *
- * - Each experiment and enrolment ID pair is sent once per client. The server dedupes too; this
- *   saves requests, it is not what keeps the counts right.
+ * - Each experiment and enrolment ID pair is sent once per client while the person keeps coming
+ *   back within 25 minutes, and again after they have been away longer, so the server can count
+ *   a new session. The server dedupes the counts itself; this saves requests.
  * - Exposures are batched: in the background a timer sends them within 2 s, unref'd so it never
  *   keeps a Node process alive; without one, the next `getVariant`, `getAll` or `track` sends
  *   them. 100 queued are sent at once either way.
@@ -162,8 +181,12 @@ export function createExposureReporter(params: CreateExposureReporterParams): Ex
 
   /** Waiting to be sent, keyed by exposureKey, in the order they were decided. */
   const queue = new Map<string, Exposure>();
-  /** Queued or sent already, or enrolled by a page seed: never queued again. */
-  const reported = boundedSet(params.reportedLimit ?? REPORTED_EXPOSURES_LIMIT);
+  /** Queued or sent already, or enrolled by a page seed: not queued again while remembered. */
+  const reported = recentSet({
+    limit: params.reportedLimit ?? REPORTED_EXPOSURES_LIMIT,
+    ttlMs: params.reportedTtlMs ?? REPORTED_EXPOSURE_TTL_MS,
+    now: params.now ?? Date.now,
+  });
   /** The exposure key each returned decision was recorded under, for `seeded`. */
   const keyOfDecision = new WeakMap<object, string>();
   const inFlight = new Set<Promise<void>>();
