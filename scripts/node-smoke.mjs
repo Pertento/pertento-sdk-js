@@ -54,11 +54,25 @@ for (const { name, input, expected } of vectors.decisions) {
   }
 }
 
-// Every enrolled decision is reported once per experiment and enrolment ID, in the order decided.
+// Every enrolled decision, and every deployed one, is reported once per experiment and
+// enrolment ID, in the order decided.
 await pertento.flush();
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const experimentById = new Map(config.experiments.map((experiment) => [experiment.id, experiment]));
+/** The deployed variant of a Deployed visitor experiment, decided for a valid visitor ID. */
+const isDeployedVisitorDecision = (input, expected) => {
+  const experiment = experimentById.get(expected.experimentId);
+  if (experiment?.status !== 'Deployed' || expected.variantId !== experiment.deployedVariantId) return false;
+  // The vectors deploy no customer ID experiment; its ID would have to be derived here.
+  strictEqual(experiment.bucketOn, 'visitor');
+  return UUID.test(input.visitorId ?? '');
+};
 const expectedExposures = new Map();
+let deployedReported = 0;
 for (const { input, expected } of vectors.decisions) {
-  if (!expected.enrolled) continue;
+  const deployed = !expected.enrolled && isDeployedVisitorDecision(input, expected);
+  if (!expected.enrolled && !deployed) continue;
+  if (deployed) deployedReported += 1;
   const enrolAs = expected.enrolAs ?? input.visitorId.toLowerCase();
   const pair = `${expected.experimentId}:${enrolAs}`;
   if (!expectedExposures.has(pair)) {
@@ -66,6 +80,7 @@ for (const { input, expected } of vectors.decisions) {
   }
 }
 ok(expectedExposures.size > 0, 'the vectors enrol someone');
+ok(deployedReported > 0, 'the vectors serve a deployed variant');
 deepStrictEqual(exposuresSent(), [...expectedExposures.values()]);
 
 const visitorId = pertento.createVisitorId();
@@ -73,10 +88,19 @@ ok(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
 const all = await pertento.getAll({ visitorId });
 const script = pertento.seedScript(all, visitorId);
 ok(script.startsWith('<script>window.PertentoSeed=') && script.endsWith(';</script>'), 'seedScript shape');
-// The seeded page enrols these decisions itself, so the client does not report them.
+// The seeded page enrols these decisions itself, so the client does not report them. The seed
+// carries no deployed decision, so those are still reported.
 const reportedBeforeSeed = exposuresSent().length;
 await pertento.flush();
-strictEqual(exposuresSent().length, reportedBeforeSeed);
+const deployedForVisitor = Object.values(all).filter(({ experimentId, variantId }) => {
+  const experiment = experimentById.get(experimentId);
+  return experiment?.status === 'Deployed' && variantId === experiment.deployedVariantId;
+});
+ok(deployedForVisitor.length > 0, 'getAll serves a deployed variant');
+deepStrictEqual(
+  exposuresSent().slice(reportedBeforeSeed),
+  deployedForVisitor.map(({ experimentId, variantId }) => ({ experimentId, variantId, enrolAs: visitorId })),
+);
 
 const keys = Object.keys(all);
 const tracked = await pertento.track('purchase', { keys, visitorId, data: { revenue: 4900 } });

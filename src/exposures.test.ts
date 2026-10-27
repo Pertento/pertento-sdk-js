@@ -49,12 +49,13 @@ function reporter(options: ReporterOptions = {}, ...script: Parameters<typeof fa
   return { exposures, errors, calls, logs, sent };
 }
 
-type ClientOptions = { background?: boolean; exposures?: boolean };
+type ClientOptions = { background?: boolean; exposures?: boolean; config?: SdkConfig };
 
-/** A client on the vectors' config; exposure requests get `reply`. */
+/** A client on the vectors' config, or `options.config`; exposure requests get `reply`. */
 function client(options: ClientOptions = {}, reply: FakeReply | ((call: FakeCall) => Promise<FakeReply>) = ACCEPTED) {
+  const config = options.config ?? CONFIG;
   const { fetch, calls } = fakeFetch((call) => {
-    if (call.url.endsWith('/sdk/config')) return { status: 200, body: { ...CONFIG, salt: SALT }, headers: { ETag: '"v1"' } };
+    if (call.url.endsWith('/sdk/config')) return { status: 200, body: { ...config, salt: SALT }, headers: { ETag: '"v1"' } };
     if (call.url.endsWith('/sdk/events')) return { status: 200, body: { ok: true, experimentVariantMap: {} } };
     return typeof reply === 'function' ? reply(call) : reply;
   });
@@ -110,20 +111,22 @@ describe('what is recorded', () => {
     expect(calls).toHaveLength(0);
   });
 
-  test('through the client: getVariant and getAll report enrolled decisions, the visitor ID lowercased', async () => {
+  test('through the client: getVariant and getAll report enrolled and deployed decisions, the visitor ID lowercased', async () => {
     const { pertento, sent } = client();
     await pertento.ready();
     await pertento.getVariant('new-checkout', { visitorId: VISITOR.toUpperCase() });
     const all = await pertento.getAll({ visitorId: visitor(1), id: 'Cust-1' });
     await pertento.flush();
 
+    // old-search is Deployed with variant 9033; the vectors' other not-running experiments do not count.
     const expected = Object.values(all)
-      .filter((decision) => decision.enrolled)
+      .filter((decision) => decision.enrolled || decision.experimentId === 504)
       .map((decision) => ({
         experimentId: decision.experimentId,
         variantId: decision.variantId,
-        enrolAs: decision.enrolled ? (decision.enrolAs ?? visitor(1)) : '',
+        enrolAs: decision.enrolled ? (decision.enrolAs ?? visitor(1)) : visitor(1),
       }));
+    expect(expected).toContainEqual({ experimentId: 504, variantId: 9033, enrolAs: visitor(1) });
     const checkout = await pertento.getVariant('new-checkout', { visitorId: VISITOR });
     expect(sent()).toEqual([{ experimentId: 501, variantId: checkout.variantId!, enrolAs: VISITOR }, ...expected]);
     // A customer ID experiment enrols as the derived ID, never the customer ID itself.
@@ -331,7 +334,11 @@ describe('seeded decisions', () => {
     // Someone else is.
     await pertento.getVariant('new-checkout', { visitorId: visitor(7) });
     await pertento.flush();
-    expect(sent()).toEqual([{ experimentId: 501, variantId: expect.any(Number), enrolAs: visitor(7) }]);
+    // The seed carries only enrolled decisions, so the deployed one is still the server's to report.
+    expect(sent()).toEqual([
+      { experimentId: 504, variantId: 9033, enrolAs: VISITOR },
+      { experimentId: 501, variantId: expect.any(Number), enrolAs: visitor(7) },
+    ]);
   });
 
   test('a seed without a visitor ID still cancels the decisions it carries', async () => {
@@ -378,6 +385,118 @@ describe('seeded decisions', () => {
     seedScript([other], visitor(3));
     await pertento.flush();
     expect(exposureCalls().flatMap(exposuresOf)).toEqual([{ experimentId: 501, variantId: other.variantId!, enrolAs: visitor(3) }]);
+  });
+});
+
+/** The vectors' config with one experiment replaced by `changes`. */
+const withExperiment = (id: number, changes: Record<string, unknown>): SdkConfig => ({
+  ...CONFIG,
+  experiments: CONFIG.experiments.map((experiment) =>
+    experiment.id === id ? ({ ...experiment, ...changes } as SdkConfig['experiments'][number]) : experiment,
+  ),
+});
+
+describe('deployed decisions', () => {
+  test('a deployed decision is reported once for a visitor, and the decision itself is unchanged', async () => {
+    const { pertento, sent } = client();
+    await pertento.ready();
+    const decision = await pertento.getVariant('old-search', { visitorId: VISITOR.toUpperCase() });
+    await pertento.getVariant('old-search', { visitorId: VISITOR });
+    await pertento.getAll({ visitorId: VISITOR });
+    await pertento.flush();
+
+    expect(decision).toEqual({
+      experimentId: 504,
+      variantId: 9033,
+      variantKey: expect.any(String),
+      payload: expect.anything(),
+      enrolled: false,
+      reason: 'not-running',
+    });
+    expect(sent().filter(({ experimentId }) => experimentId === 504)).toEqual([
+      { experimentId: 504, variantId: 9033, enrolAs: VISITOR },
+    ]);
+    await pertento.close();
+  });
+
+  test('a deployed customer ID experiment is reported once, as the ID the server derives', async () => {
+    const config = withExperiment(502, { status: 'Deployed', deployedVariantId: 9013 });
+    const { pertento, sent } = client({ config });
+    await pertento.ready();
+    const decision = await pertento.getVariant('pricing-page', { id: 'Cust-1' });
+    await pertento.getVariant('pricing-page', { id: 'Cust-1', visitorId: VISITOR });
+    await pertento.getAll({ id: 'Cust-1' });
+    await pertento.flush();
+
+    expect(decision).toMatchObject({ experimentId: 502, variantId: 9013, enrolled: false, reason: 'not-running' });
+    expect(decision).not.toHaveProperty('enrolAs');
+    expect(sent()).toEqual([
+      { experimentId: 502, variantId: 9013, enrolAs: await deriveEnrolmentId({ salt: SALT, customerId: 'Cust-1' }) },
+    ]);
+    expect(JSON.stringify(sent())).not.toContain('Cust-1');
+    await pertento.close();
+  });
+
+  test('a deployed decision with no ID of its experiment\'s kind sends nothing', async () => {
+    const config = withExperiment(502, { status: 'Deployed', deployedVariantId: 9013 });
+    const { pertento, exposureCalls } = client({ config });
+    await pertento.ready();
+    const deployed = await pertento.getVariant('old-search');
+    await pertento.getVariant('old-search', { id: 'Cust-1' });
+    await pertento.getVariant('old-search', { visitorId: 'not-a-uuid' });
+    await pertento.getVariant('pricing-page', { visitorId: VISITOR });
+    await pertento.getVariant('pricing-page', { id: '' });
+    await pertento.flush();
+
+    expect(deployed.variantId).toBe(9033);
+    expect(exposureCalls()).toHaveLength(0);
+  });
+
+  test('an experiment that is not running and not deployed sends nothing', async () => {
+    const config = withExperiment(504, { status: 'Ended' });
+    const { pertento, exposureCalls } = client({ config });
+    await pertento.ready();
+    const ended = await pertento.getVariant('old-search', { visitorId: VISITOR });
+    // The vectors' Paused experiment, and two Deployed ones that serve control for want of a deployed variant.
+    for (const key of ['unknown-status', 'deployed-without-variant-id', 'deployed-naming-no-variant']) {
+      await pertento.getVariant(key, { visitorId: VISITOR });
+    }
+    await pertento.flush();
+
+    expect(ended).toMatchObject({ enrolled: false, reason: 'not-running' });
+    expect(exposureCalls()).toHaveLength(0);
+  });
+
+  test('exposures: false sends no deployed decision', async () => {
+    const config = withExperiment(502, { status: 'Deployed', deployedVariantId: 9013 });
+    const { pertento, exposureCalls } = client({ config, exposures: false });
+    await pertento.ready();
+    const decision = await pertento.getVariant('old-search', { visitorId: VISITOR });
+    await pertento.getVariant('pricing-page', { id: 'Cust-1' });
+    await pertento.getAll({ visitorId: visitor(2), id: 'Cust-1' });
+    await pertento.flush();
+    await pertento.close();
+
+    expect(decision.variantId).toBe(9033);
+    expect(exposureCalls()).toHaveLength(0);
+  });
+
+  test('the reporter queues a not-enrolled decision only under the ID it is given, deduped like any other', async () => {
+    const { exposures, sent } = reporter();
+    const deployed: Decision = {
+      experimentId: 504,
+      variantId: 9033,
+      variantKey: 'c',
+      payload: null,
+      enrolled: false,
+      reason: 'not-running',
+    };
+    exposures.record([deployed], VISITOR);
+    exposures.record([deployed], VISITOR, new Map([[deployed, VISITOR.toUpperCase()]]));
+    exposures.record([deployed], VISITOR, new Map([[deployed, VISITOR]]));
+    exposures.record([deployed], VISITOR, new Map([[deployed, 'not-a-uuid']]));
+    await exposures.flush();
+    expect(sent()).toEqual([{ experimentId: 504, variantId: 9033, enrolAs: VISITOR }]);
   });
 });
 

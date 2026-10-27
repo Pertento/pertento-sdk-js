@@ -1,7 +1,7 @@
-import type { Decision } from './evaluator';
+import type { DecideIdentity, Decision, SdkConfig } from './evaluator';
 import type { ErrorReporter, PertentoErrorKind } from './errors';
 import type { FetchLike, FetchResponse } from './http';
-import { isUuid } from './evaluator';
+import { deriveEnrolmentId, isUuid } from './evaluator';
 import { kindForStatus, serverMessage, thrownFetchError, timedFetch } from './http';
 
 /** The most exposures one request carries. A queue this long is sent at once. */
@@ -13,15 +13,21 @@ export const EXPOSURE_TIMEOUT_MS = 2_000;
 /** How many experiment and enrolment ID pairs a client remembers as reported. */
 export const REPORTED_EXPOSURES_LIMIT = 10_000;
 
-/** One enrolled decision, as `POST /sdk/exposures` takes it. */
+/** One enrolled decision, or one served from a Deployed experiment, as `POST /sdk/exposures` takes it. */
 export type Exposure = { experimentId: number; variantId: number; enrolAs: string };
 
 export type ExposureReporter = {
   /**
-   * Queues the enrolled decisions this client has not reported yet. `visitorId` is the cleaned
-   * visitor ID they were decided for. Only touches memory: a send it starts is not awaited.
+   * Queues the decisions that count which this client has not reported yet: the enrolled ones,
+   * and those `deployedIds` gives an enrolment ID (see `deployedEnrolmentIds`). `visitorId` is
+   * the cleaned visitor ID they were decided for. Only touches memory: a send it starts is not
+   * awaited.
    */
-  record: (decisions: readonly Decision[], visitorId: string | undefined) => void;
+  record: (
+    decisions: readonly Decision[],
+    visitorId: string | undefined,
+    deployedIds?: ReadonlyMap<Decision, string>,
+  ) => void;
   /**
    * A page seeded with these decisions enrols them itself, so they are taken out of the queue
    * and never queued again. `visitorId` is the cleaned visitor ID the seed carries.
@@ -49,16 +55,69 @@ export type CreateExposureReporterParams = {
   reportedLimit?: number;
 };
 
-/** The enrolment ID the server counts: the derived one for a customer ID experiment, else the visitor ID. */
-const enrolmentIdOf = (decision: Decision, visitorId: string | undefined): string | undefined => {
-  if (!decision.enrolled) return undefined;
-  const id = decision.enrolAs ?? visitorId;
+/**
+ * The enrolment ID the server counts a decision under, or undefined when it does not count. For
+ * an enrolled decision, the derived one for a customer ID experiment, else the visitor ID; for a
+ * decision served from a Deployed experiment, the one `deployedIds` gives it.
+ */
+const enrolmentIdOf = (
+  decision: Decision,
+  visitorId: string | undefined,
+  deployedIds?: ReadonlyMap<Decision, string>,
+): string | undefined => {
+  const id = decision.enrolled ? (decision.enrolAs ?? visitorId) : deployedIds?.get(decision);
   return isUuid(id) ? id.toLowerCase() : undefined;
 };
 
 const isPositiveId = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) > 0;
 
 const exposureKey = (experimentId: number, enrolAs: string): string => `${experimentId}:${enrolAs}`;
+
+export type DeployedEnrolmentIdsParams = {
+  decisions: readonly Decision[];
+  config: Readonly<SdkConfig>;
+  salt: string;
+  /** The cleaned identity the decisions were made for. */
+  identity: DecideIdentity;
+};
+
+/**
+ * The enrolment ID each decision served from a Deployed experiment is reported under, keyed by
+ * the decision. Such a decision is not enrolled, but the server bills it as a deployed variant's
+ * session, as it does a visit to a page showing the deployed variant.
+ *
+ * A decision gets one when its experiment is Deployed and it is the deployed variant: the visitor
+ * ID for a visitor experiment, or for a customer ID experiment the ID derived from `identity.id`
+ * as the server derives it (a decision that is not enrolled carries no `enrolAs`). One with no ID
+ * of its experiment's kind gets none. Rejects only when Web Crypto fails.
+ */
+export async function deployedEnrolmentIds({
+  decisions,
+  config,
+  salt,
+  identity,
+}: DeployedEnrolmentIdsParams): Promise<Map<Decision, string>> {
+  const ids = new Map<Decision, string>();
+  const experiments = Array.isArray(config?.experiments) ? config.experiments : [];
+  // One customer ID derives one enrolment ID, whatever the experiment.
+  let derived: Promise<string> | undefined;
+  for (const decision of decisions) {
+    if (decision === null || typeof decision !== 'object' || decision.enrolled) continue;
+    const experiment = experiments.find(
+      (candidate) => candidate !== null && typeof candidate === 'object' && candidate.id === decision.experimentId,
+    );
+    if (experiment?.status !== 'Deployed') continue;
+    if (!isPositiveId(decision.variantId) || decision.variantId !== experiment.deployedVariantId) continue;
+    let id: string | undefined;
+    if (experiment.bucketOn === 'visitor') id = identity.visitorId;
+    else if (experiment.bucketOn === 'customer_id' && typeof identity.id === 'string' && identity.id.length > 0) {
+      derived ??= deriveEnrolmentId({ salt, customerId: identity.id });
+      id = await derived;
+    }
+    if (isUuid(id)) ids.set(decision, id.toLowerCase());
+  }
+  return ids;
+}
 
 /**
  * A set that holds at most `limit` keys. Adding one more forgets the key seen longest ago,
@@ -81,7 +140,8 @@ function boundedSet(limit: number): { has: (key: string) => boolean; add: (key: 
 
 /**
  * Reports the enrolled decisions this client makes to `POST /sdk/exposures`, so a flag decided
- * only on the server enrols its visitors as the browser's snippet would.
+ * only on the server enrols its visitors as the browser's snippet would. Decisions served from a
+ * Deployed experiment are reported too, and count as a deployed variant's sessions.
  *
  * - Each experiment and enrolment ID pair is sent once per client. The server dedupes too; this
  *   saves requests, it is not what keeps the counts right.
@@ -92,7 +152,8 @@ function boundedSet(limit: number): { has: (key: string) => boolean; add: (key: 
  *   reported with source `exposures`, logged once per kind. Nothing here throws, and no
  *   decision waits for a send.
  * - Decisions put in a page seed are never sent: the browser enrols those. That only saves a
- *   request; the server counts a person once whichever side reports them first.
+ *   request; the server counts a person once whichever side reports them first. A seed carries
+ *   only enrolled decisions, so a deployed one is reported whether the page is seeded or not.
  */
 export function createExposureReporter(params: CreateExposureReporterParams): ExposureReporter {
   const { baseUrl, serverKey, fetch, errors, background, enabled } = params;
@@ -195,10 +256,14 @@ export function createExposureReporter(params: CreateExposureReporterParams): Ex
     }
   };
 
-  const queueDecisions = (decisions: readonly Decision[], visitorId: string | undefined): void => {
+  const queueDecisions = (
+    decisions: readonly Decision[],
+    visitorId: string | undefined,
+    deployedIds?: ReadonlyMap<Decision, string>,
+  ): void => {
     for (const decision of decisions) {
-      const enrolAs = enrolmentIdOf(decision, visitorId);
-      if (!decision.enrolled || enrolAs === undefined) continue;
+      const enrolAs = enrolmentIdOf(decision, visitorId, deployedIds);
+      if (enrolAs === undefined) continue;
       const { experimentId, variantId } = decision;
       if (!isPositiveId(experimentId) || !isPositiveId(variantId)) continue;
       const key = exposureKey(experimentId, enrolAs);
@@ -227,10 +292,10 @@ export function createExposureReporter(params: CreateExposureReporterParams): Ex
     if (queue.size === 0) clearTimer();
   };
 
-  const record = (decisions: readonly Decision[], visitorId: string | undefined): void => {
+  const record: ExposureReporter['record'] = (decisions, visitorId, deployedIds) => {
     if (!enabled) return;
     try {
-      queueDecisions(decisions, visitorId);
+      queueDecisions(decisions, visitorId, deployedIds);
     } catch (error) {
       unexpected(error);
     }

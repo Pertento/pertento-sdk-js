@@ -1,3 +1,4 @@
+import type { LoadedConfig } from './config-poller';
 import type { DecideIdentity, Decision, NotEnrolledDecision } from './evaluator';
 import type { PertentoError } from './errors';
 import type { FetchLike } from './http';
@@ -6,7 +7,7 @@ import type { TrackOptions, TrackResult } from './track';
 import { createConfigPoller } from './config-poller';
 import { createErrorReporter } from './errors';
 import { createVisitorId, decide, decideAll, isUuid } from './evaluator';
-import { createExposureReporter } from './exposures';
+import { createExposureReporter, deployedEnrolmentIds } from './exposures';
 import { DEFAULT_BASE_URL, globalFetch } from './http';
 import { seedScript } from './seed-script';
 import { sendTrack } from './track';
@@ -37,9 +38,10 @@ export type PertentoOptions = {
   background?: boolean;
   /**
    * Report the enrolled decisions `getVariant` and `getAll` make to Pertento (default `true`),
-   * so experiments decided only on your server get results. They are batched and sent at most
-   * once; see the README. Decisions you put in a page seed are left to the browser. Set
-   * `false` to send nothing.
+   * so experiments decided only on your server get results. Decisions served from a deployed
+   * experiment are reported too, and count toward sessions as a deployed variant does. They are
+   * batched and sent at most once; see the README. Decisions you put in a page seed are left to
+   * the browser. Set `false` to send nothing.
    */
   exposures?: boolean;
   /** A `fetch` to use instead of the global one (a proxy agent, a test stub). */
@@ -193,6 +195,22 @@ export function createPertento(options: PertentoOptions): Pertento {
     });
   };
 
+  /** Queues what the decisions report. Never rejects; a deployed decision's ID is derived first. */
+  const recordExposures = async (decisions: readonly Decision[], loaded: LoadedConfig, identity: Identity) => {
+    if (!exposuresOn) return;
+    let deployedIds: Map<Decision, string> | undefined;
+    try {
+      deployedIds = await deployedEnrolmentIds({ decisions, config: loaded.config, salt: loaded.salt, identity });
+    } catch (error) {
+      errors.report({
+        source: 'exposures',
+        kind: 'evaluation',
+        message: `Deployed decisions not reported: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+    exposures.record(decisions, identity.visitorId, deployedIds);
+  };
+
   return {
     ready: (timeoutMs = DEFAULT_READY_TIMEOUT_MS) => poller.ready(timeoutMs),
 
@@ -209,7 +227,7 @@ export function createPertento(options: PertentoOptions): Pertento {
         evaluationFailed(error);
         return unknownKey();
       }
-      exposures.record([decision], cleaned.visitorId);
+      await recordExposures([decision], loaded, cleaned);
       return decision;
     },
 
@@ -226,7 +244,7 @@ export function createPertento(options: PertentoOptions): Pertento {
         evaluationFailed(error);
         return {};
       }
-      exposures.record(Object.values(decisions), cleaned.visitorId);
+      await recordExposures(Object.values(decisions), loaded, cleaned);
       return decisions;
     },
 

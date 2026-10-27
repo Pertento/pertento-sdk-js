@@ -209,7 +209,16 @@ feature flag in your backend code, an API response, an email) has no snippet to 
 client reports it: every enrolled decision `getVariant` and `getAll` return is sent to
 `POST /sdk/exposures`. Exposures are what an experiment's results are counted from, and they
 count toward your plan's sessions as a visit with the snippet does, so without them a flag decided
-only on your server has no results and no sessions. Decisions that are not enrolled (`enrolled: false`) are not exposures and are never sent.
+only on your server has no results and no sessions. Decisions that are not enrolled
+(`enrolled: false`) are not exposures and are never sent, with the one exception below.
+
+Decisions served from a deployed experiment are reported too. Once you deploy a variant, every
+person is served it with `enrolled: false` and reason `not-running`, and the client reports that
+decision so it counts toward your plan's sessions as a deployed variant on a page does. It is
+not an enrolment and adds nothing to the experiment's results. The enrolment ID is the visitor ID
+for a visitor experiment, and the ID derived from `id` for a customer ID experiment; a decision
+without the ID its experiment assigns on is not sent. A page seed carries only enrolled
+decisions, so a deployed decision is reported whether or not you seed the page.
 
 You do not call anything to make this happen. How it works:
 
@@ -441,7 +450,7 @@ Answers `{ "ok": true, "experimentVariantMap": { "501": "9002" } }`: the experim
 
 ### `POST /sdk/exposures`
 
-Reports enrolled decisions made on your side, as the client does in the background (see
+Reports enrolled and deployed decisions made on your side, as the client does in the background (see
 [Exposures](#exposures)). Rate limited per key with a budget of its own.
 
 ```sh
@@ -453,10 +462,12 @@ curl https://tracking.pertento.ai/sdk/exposures \
 
 Body: `exposures`, 1 to 100 items, each the `experimentId` and `variantId` of an enrolled
 decision and `enrolAs`: the decision's `enrolAs` for a customer ID experiment, otherwise the
-visitor ID it was decided for, lowercased. Answers `{ "ok": true, "accepted": 1 }`. Exposures for
-an experiment that is not running are ignored, and so are repeats of an experiment and `enrolAs`
-already reported. Do not report decisions you also put in a page seed: the snippet reports
-those.
+visitor ID it was decided for, lowercased. An item for a deployed experiment names its deployed
+variant, with the visitor ID or, for a customer ID experiment, the enrolment ID derived from the
+customer ID as `enrolAs` is (`spec/SPEC.md`, section 4); it counts toward sessions and enrols
+nobody. Answers `{ "ok": true, "accepted": 1 }`. Exposures for an experiment that is neither
+running nor deployed are ignored, and so are repeats of an experiment and `enrolAs` already
+reported. Do not report decisions you also put in a page seed: the snippet reports those.
 
 ### `GET /sdk/config`
 
