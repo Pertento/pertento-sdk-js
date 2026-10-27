@@ -37,8 +37,9 @@ afterEach(() => {
   setSystemTime();
 });
 
+// Exposures are off here: these tests count config requests, and src/exposures.test.ts covers them.
 const client = (fetch: ReturnType<typeof fakeFetch>['fetch'], extra: { background?: boolean } = {}) =>
-  createPertento({ websiteId: WEBSITE_ID, serverKey: KEY, baseUrl: 'https://t.example/', fetch, ...extra });
+  createPertento({ websiteId: WEBSITE_ID, serverKey: KEY, baseUrl: 'https://t.example/', fetch, exposures: false, ...extra });
 
 describe('createPertento options', () => {
   test('throws on a missing or malformed key, a bad website ID or a too-short poll interval', () => {

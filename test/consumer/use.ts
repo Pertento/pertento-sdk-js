@@ -8,6 +8,7 @@ export async function example(): Promise<string> {
     websiteId: 1,
     serverKey: 'psk_live_test_00000000000000000000000000000000000000',
     pollIntervalMs: 30_000,
+    exposures: true,
     fetch: globalThis.fetch,
   });
   await pertento.ready();
@@ -23,6 +24,8 @@ export async function example(): Promise<string> {
   // @ts-expect-error keys is required
   await pertento.track('purchase', { visitorId });
   const error: PertentoError | null = result.ok ? pertento.lastError : result.error;
-  pertento.close();
+  const flushed: Promise<void> = pertento.flush();
+  await flushed;
+  await pertento.close();
   return `${pertento.seedScript([decision, ...Object.values(all)], visitorId, { nonce: 'abc' })}${error?.kind ?? ''}`;
 }

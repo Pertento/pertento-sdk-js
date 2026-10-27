@@ -1,7 +1,7 @@
 /**
  * `@pertentoai/sdk`: decide Pertento experiments on your server, seed the page with the
- * decisions, and report conversions from your backend. Runs on Node 20+, Bun, Deno and edge
- * workers; it uses only `fetch` and Web Crypto and has no dependencies.
+ * decisions, and report exposures and conversions from your backend. Runs on Node 20+, Bun,
+ * Deno and edge workers; it uses only `fetch` and Web Crypto and has no dependencies.
  *
  * @packageDocumentation
  */

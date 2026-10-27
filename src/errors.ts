@@ -28,8 +28,11 @@ export type PertentoErrorKind =
   /** Evaluating a flag failed inside Web Crypto. The call resolved to control. */
   | 'evaluation';
 
-/** Which part of the SDK the error came from. */
-export type PertentoErrorSource = 'config' | 'track' | 'decide';
+/**
+ * Which part of the SDK the error came from. `exposures` is the background report of enrolled
+ * decisions: a batch that failed was dropped, and the decisions themselves were unaffected.
+ */
+export type PertentoErrorSource = 'config' | 'track' | 'decide' | 'exposures';
 
 /** The most recent failure, as `client.lastError` shows it. */
 export type PertentoError = {
