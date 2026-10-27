@@ -207,9 +207,9 @@ An exposure is Pertento's record that a person was enrolled in a variant of an e
 page you seed, the snippet records it. A decision your server acts on without seeding a page (a
 feature flag in your backend code, an API response, an email) has no snippet to record it, so the
 client reports it: every enrolled decision `getVariant` and `getAll` return is sent to
-`POST /sdk/exposures`. Exposures are what an experiment's results are counted from, and what your
-plan's usage counts, so without them a flag decided only on your server has no results and no
-usage. Decisions that are not enrolled (`enrolled: false`) are not exposures and are never sent.
+`POST /sdk/exposures`. Exposures are what an experiment's results are counted from, and they
+count toward your plan's sessions as a visit with the snippet does, so without them a flag decided
+only on your server has no results and no sessions. Decisions that are not enrolled (`enrolled: false`) are not exposures and are never sent.
 
 You do not call anything to make this happen. How it works:
 
@@ -225,16 +225,16 @@ You do not call anything to make this happen. How it works:
   failure.
 - **Seeded pages are left to the browser.** The decisions you pass to `pertento.seedScript()` are
   taken out of the queue and never sent, because the snippet enrols them. The standalone
-  `seedScript` export does not do this; use the client's method. One case is counted by both: a
-  batch that was already sent before you built the seed. That is rare when, as usual, the seed is
-  built in the same request as the decisions, right after them.
+  `seedScript` export does not do this; use the client's method. This only saves a request:
+  Pertento counts a person once whether your server or the page reports them first, so a batch
+  sent before you built the seed is not counted twice.
 - **Shutting down.** `await pertento.close()` sends what is queued and stops the timers.
   `await pertento.flush()` sends the queue without stopping anything; it never rejects.
 - **Edge workers.** With `background: false` there is no timer: the next `getVariant`, `getAll`
   or `track` sends the queue, and you pass `pertento.flush()` to `waitUntil` so the last batch of a
-  request is not cut off (see [Edge workers](#edge-workers)). Since the next call sends what is
-  queued, decide a page you seed with a single `getAll`, or build the seed before deciding again,
-  so none of its decisions is sent before the seed exists.
+  request is not cut off (see [Edge workers](#edge-workers)).
+- **Limits.** Up to 100 exposures per request, and 600 requests a minute per server key, a budget
+  of its own so exposures never use up the one your conversions need.
 
 To report nothing, pass `exposures: false`. Decisions are unchanged; experiments decided only on
 your server then have no results.
