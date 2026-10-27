@@ -91,9 +91,8 @@ function boundedSet(limit: number): { has: (key: string) => boolean; add: (key: 
  * - At most once: one attempt, a 2 s timeout, no retry. A batch that fails is dropped and
  *   reported with source `exposures`, logged once per kind. Nothing here throws, and no
  *   decision waits for a send.
- * - Decisions put in a page seed are never sent: the browser enrols those. A batch that went
- *   out before the seed was built is counted by both; the seed is normally built in the same
- *   request as the decisions, before the timer fires, so this is rare.
+ * - Decisions put in a page seed are never sent: the browser enrols those. That only saves a
+ *   request; the server counts a person once whichever side reports them first.
  */
 export function createExposureReporter(params: CreateExposureReporterParams): ExposureReporter {
   const { baseUrl, serverKey, fetch, errors, background, enabled } = params;
