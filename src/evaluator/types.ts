@@ -12,7 +12,7 @@ export type TrackingMethod = (typeof TRACKING_METHODS)[number];
 export type DecisionReason = (typeof DECISION_REASONS)[number];
 export type SdkConfigVersion = (typeof SUPPORTED_CONFIG_VERSIONS)[number];
 
-/** Same shape as `AttributeRule` in pertentodb/types. `value` is absent for 'exists'. */
+/** One attribute rule. `value` is absent for 'exists'. */
 export type AttributeRule = {
   attribute: string;
   operator: AttributeRuleOperator;
