@@ -28,7 +28,8 @@ npm install @pertentoai/sdk
 ## Quick start
 
 Create one client per process and share it. It loads the website's config and keeps it fresh
-in the background, so `getVariant` is decided locally with no network call.
+in the background, so `getVariant` is decided locally with no network call. What it decided is
+reported to Pertento afterwards, in batches (see [Exposures](#exposures)).
 
 ```ts
 import { createPertento } from '@pertentoai/sdk';
@@ -83,7 +84,8 @@ The page then carries:
 
 The snippet reads `window.PertentoSeed`, adopts the visitor ID, enrols the visitor in exactly
 the variants your server chose, and counts them. **The seed must come before the snippet**; a
-seed written after it is not seen.
+seed written after it is not seen. Because the page reports these decisions, the client does
+not report them as well.
 
 ### Carrying the visitor ID
 
@@ -199,6 +201,47 @@ version 2; an older SDK treats it as a version it does not understand, so every 
 `unknown-key` (your default) until you upgrade. A config without flags stays version 1, which every
 version reads.
 
+## Exposures
+
+An exposure is Pertento's record that a person was enrolled in a variant of an experiment. On a
+page you seed, the snippet records it. A decision your server acts on without seeding a page (a
+feature flag in your backend code, an API response, an email) has no snippet to record it, so the
+client reports it: every enrolled decision `getVariant` and `getAll` return is sent to
+`POST /sdk/exposures`. Exposures are what an experiment's results are counted from, and what your
+plan's usage counts, so without them a flag decided only on your server has no results and no
+usage. Decisions that are not enrolled (`enrolled: false`) are not exposures and are never sent.
+
+You do not call anything to make this happen. How it works:
+
+- **Once per person.** Each experiment and enrolment ID (`decision.enrolAs` for a customer ID
+  experiment, the visitor ID otherwise) is sent once per client. The client remembers the last
+  10,000 it has seen; Pertento also ignores repeats, so a person reported by two of your servers
+  is still counted once.
+- **Batched.** Exposures wait in a queue and are sent within 2 seconds, or at once when 100 are
+  waiting. In Node the timer is unref'd and never keeps your process alive.
+- **Never in the way of a decision.** `getVariant` and `getAll` return before anything is sent,
+  and nothing is retried: one attempt with a 2 second timeout. A batch that fails is dropped,
+  recorded in `lastError` with source `exposures`, and logged once per kind like any other
+  failure.
+- **Seeded pages are left to the browser.** The decisions you pass to `pertento.seedScript()` are
+  taken out of the queue and never sent, because the snippet enrols them. The standalone
+  `seedScript` export does not do this; use the client's method. One case is counted by both: a
+  batch that was already sent before you built the seed. That is rare when, as usual, the seed is
+  built in the same request as the decisions, right after them.
+- **Shutting down.** `await pertento.close()` sends what is queued and stops the timers.
+  `await pertento.flush()` sends the queue without stopping anything; it never rejects.
+- **Edge workers.** With `background: false` there is no timer: the next `getVariant`, `getAll`
+  or `track` sends the queue, and you pass `pertento.flush()` to `waitUntil` so the last batch of a
+  request is not cut off (see [Edge workers](#edge-workers)). Since the next call sends what is
+  queued, decide a page you seed with a single `getAll`, or build the seed before deciding again,
+  so none of its decisions is sent before the seed exists.
+
+To report nothing, pass `exposures: false`. Decisions are unchanged; experiments decided only on
+your server then have no results.
+
+Exposures are reported from version 0.3.0. Earlier versions report only what the snippet sees on
+seeded pages.
+
 ## Reporting conversions from your backend
 
 ```ts
@@ -228,9 +271,9 @@ server needs no extra bookkeeping. The rules:
   **Server-side**. In that mode the browser snippet reports nothing, so conversions are never
   counted twice. In any other mode the server answers 409 and `track()` resolves
   `{ ok: false, error: { kind: 'wrong-tracking-method' } }`.
-- **Only for visitors the browser has enrolled.** A conversion counts against the visitors who
-  loaded a page carrying the seed. Tracking someone who never saw a seeded page adds a
-  conversion with no matching visitor and skews the result.
+- **Only for people who were enrolled.** A conversion counts against the visitors who loaded a
+  page carrying the seed, or whose decision the client reported as an exposure. Tracking someone
+  who was never enrolled adds a conversion with no matching visitor and skews the result.
 - **At most once.** `track()` makes one attempt with a 2 second timeout and **never retries**,
   because a retried purchase that had in fact arrived would be counted twice. Do not wrap it in
   your own retry either. A timeout may or may not have been recorded.
@@ -251,6 +294,7 @@ next succeeds.
 | Server key refused (401) | Retried with backoff (2 seconds, doubling to 30) for 2 minutes, since a key just created takes up to about 30 seconds to become active. Any other answer ends the run. After 2 minutes of nothing but 401s, polling stops for good and `ready()` resolves `false` at once: check the key, or create a new one and restart. The last good config, if any, keeps being used. |
 | Config of a newer version than this SDK understands | Treated as no config (every key `unknown-key`). Upgrade the package. |
 | Server key belongs to another website than `websiteId` | Treated as no config. Fix the settings. |
+| A batch of exposures fails (network, timeout, any refusal) | The batch is dropped, not retried. Decisions are unaffected. |
 
 `createPertento` itself throws a `TypeError` for invalid options (a missing or malformed key, a
 bad website ID).
@@ -269,7 +313,8 @@ config costs an empty 304. In Node the timer is unref'd and never keeps your pro
 Request-scoped runtimes keep no timers between requests, and some forbid network calls outside
 a request. Create the client at module scope with `background: false`, and await `ready()` in
 the handler with a short timeout (it returns at once after the first load, and at once after a
-failed one, so a Pertento outage costs a page at most that timeout):
+failed one, so a Pertento outage costs a page at most that timeout). Pass `pertento.flush()` to
+`waitUntil`, so the exposures a request queued are sent after the response:
 
 ```ts
 import { createPertento } from '@pertentoai/sdk';
@@ -277,7 +322,11 @@ import { createPertento } from '@pertentoai/sdk';
 let pertento: ReturnType<typeof createPertento> | undefined;
 
 export default {
-  async fetch(request: Request, env: { PERTENTO_WEBSITE_ID: string; PERTENTO_SERVER_KEY: string }) {
+  async fetch(
+    request: Request,
+    env: { PERTENTO_WEBSITE_ID: string; PERTENTO_SERVER_KEY: string },
+    ctx: { waitUntil: (promise: Promise<unknown>) => void },
+  ) {
     pertento ??= createPertento({
       websiteId: Number(env.PERTENTO_WEBSITE_ID),
       serverKey: env.PERTENTO_SERVER_KEY,
@@ -288,6 +337,7 @@ export default {
     const visitorId = request.headers.get('x-pertento-visitor-id') ?? pertento.createVisitorId();
     const decision = await pertento.getVariant('new-checkout', { visitorId });
     const head = pertento.seedScript([decision], visitorId);
+    ctx.waitUntil(pertento.flush()); // sends any exposures this request queued; never rejects
     return new Response(renderPage({ head, decision }), { headers: { 'content-type': 'text/html' } });
   },
 };
@@ -295,7 +345,7 @@ export default {
 
 With `background: false`, a call that finds the config older than `pollIntervalMs` answers from
 the config it has and starts a refresh it does not wait for, so a later request sees the new
-config.
+config. Queued exposures are sent the same way: by the next call, or by `flush()`.
 
 ## API
 
@@ -306,6 +356,7 @@ createPertento({
   baseUrl?: string,         // default https://tracking.pertento.ai
   pollIntervalMs?: number,  // default 30000, minimum 5000
   background?: boolean,     // default true; false for edge workers
+  exposures?: boolean,      // default true; false reports no exposures
   fetch?: typeof fetch,     // e.g. a proxy-aware fetch, or a stub in tests
 }) => {
   ready(timeoutMs = 5000): Promise<boolean>, // never rejects
@@ -314,8 +365,9 @@ createPertento({
   createVisitorId(): string,
   seedScript(decisions: Decision[] | Record<string, Decision>, visitorId?: string, options?: { nonce?: string }): string,
   track(event: string, options: { keys: string[], visitorId?, id?, attributes?, data? }): Promise<TrackResult>,
+  flush(): Promise<void>,   // sends queued exposures; never rejects
   readonly lastError: PertentoError | null,
-  close(): void,
+  close(): Promise<void>,   // sends queued exposures and stops the timers; never rejects
 }
 ```
 
@@ -386,6 +438,25 @@ person was decided on), and `visitorId`, `id` or both (one is required), plus op
 `attributes`, which must be the ones sent to `/sdk/decide`. Unknown fields are refused with 400.
 Answers `{ "ok": true, "experimentVariantMap": { "501": "9002" } }`: the experiments among
 `keys` that the person is enrolled in, which is what the events were attributed to.
+
+### `POST /sdk/exposures`
+
+Reports enrolled decisions made on your side, as the client does in the background (see
+[Exposures](#exposures)). Rate limited per key with a budget of its own.
+
+```sh
+curl https://tracking.pertento.ai/sdk/exposures \
+  -H "Authorization: Bearer $PERTENTO_SERVER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "exposures": [{ "experimentId": 501, "variantId": 9002, "enrolAs": "3f2504e0-4f89-41d3-9a0c-0305e82c3301" }] }'
+```
+
+Body: `exposures`, 1 to 100 items, each the `experimentId` and `variantId` of an enrolled
+decision and `enrolAs`: the decision's `enrolAs` for a customer ID experiment, otherwise the
+visitor ID it was decided for, lowercased. Answers `{ "ok": true, "accepted": 1 }`. Exposures for
+an experiment that is not running are ignored, and so are repeats of an experiment and `enrolAs`
+already reported. Do not report decisions you also put in a page seed: the snippet reports
+those.
 
 ### `GET /sdk/config`
 
