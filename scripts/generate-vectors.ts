@@ -17,16 +17,19 @@ import type {
   SdkExperiment,
   SdkVariant,
 } from '../src/evaluator';
+import type { RolloutDecisionCase, RolloutVariantMapCase } from './rollout-cases';
 import { existsSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   bucketFor,
+  CONFIG_VERSION_WITHOUT_ROLLOUTS,
   decide,
   deriveEnrolmentId,
   pickByBucket,
   SDK_CONFIG_VERSION,
   variantMapFor,
 } from '../src/evaluator';
+import { buildRolloutCases } from './rollout-cases';
 
 const OUT = resolve(import.meta.dir, '../spec/vectors.json');
 
@@ -74,8 +77,9 @@ const experiment = (overrides: Partial<SdkExperiment>): SdkExperiment => ({
   ...overrides,
 });
 
+// No rollouts, so version 1: a version 2 reader decides it exactly as a version 1 reader does.
 const CONFIG: SdkConfig = {
-  version: SDK_CONFIG_VERSION,
+  version: CONFIG_VERSION_WITHOUT_ROLLOUTS,
   websiteId: 77,
   generatedAt: 1_760_400_000_000,
   trackingMethod: 'server',
@@ -320,6 +324,13 @@ const VARIANT_MAP_CASES: VariantMapCase[] = [
   { name: 'no ID', input: {} },
 ];
 
+/** The bucket an enrolled flag decision was made at: on enrolAs for a customer ID, else the visitor ID. */
+async function enrolledBucket(decision: Decision, visitorId: string | undefined): Promise<number | null> {
+  if (!decision.enrolled) return null;
+  const id = decision.enrolAs ?? visitorId;
+  return id === undefined ? null : bucketFor({ salt: SALT_A, experimentId: decision.experimentId, id });
+}
+
 async function main(): Promise<void> {
   if (existsSync(OUT) && !process.argv.includes('--force')) {
     console.error(`${OUT} exists. Vectors change only with a spec version bump; pass --force if that is what this is.`);
@@ -361,10 +372,25 @@ async function main(): Promise<void> {
     variantMaps.push({ name, input, expected: await variantMapFor({ config: CONFIG, salt: SALT_A, ...input }) });
   }
 
+  const rollout = await buildRolloutCases({ salt: SALT_A, visitor: VISITOR });
+  const rolloutDecisions: Array<RolloutDecisionCase & { bucket: number | null; expected: Decision }> = [];
+  for (const { name, input } of rollout.decisionCases) {
+    const expected = await decide({ config: rollout.config, salt: SALT_A, ...input });
+    rolloutDecisions.push({ name, input, bucket: await enrolledBucket(expected, input.visitorId), expected });
+  }
+  const rolloutVariantMaps: Array<RolloutVariantMapCase & { expected: Record<string, string> }> = [];
+  for (const { name, input } of rollout.variantMapCases) {
+    rolloutVariantMaps.push({
+      name,
+      input,
+      expected: await variantMapFor({ config: rollout.config, salt: SALT_A, ...input }),
+    });
+  }
+
   const file = {
     specVersion: SDK_CONFIG_VERSION,
     description:
-      'Test vectors for spec/SPEC.md. buckets and enrolmentIds carry their own salt; decisions and variantMaps all use decisionSalt and decisionConfig; weightWalks give the variant id (or null) the weight walk picks at a bucket.',
+      'Test vectors for spec/SPEC.md. buckets and enrolmentIds carry their own salt; decisions and variantMaps all use decisionSalt and decisionConfig; weightWalks give the variant id (or null) the weight walk picks at a bucket; rolloutDecisions and rolloutVariantMaps use decisionSalt and rolloutConfig (feature flags), and each rollout decision carries the bucket it was decided at when enrolled (null otherwise). decisionConfig has no rollouts and is version 1; rolloutConfig has them and is version 2.',
     buckets,
     enrolmentIds,
     weightWalks,
@@ -372,10 +398,13 @@ async function main(): Promise<void> {
     decisionConfig: CONFIG,
     decisions,
     variantMaps,
+    rolloutConfig: rollout.config,
+    rolloutDecisions,
+    rolloutVariantMaps,
   };
   writeFileSync(OUT, `${JSON.stringify(file, null, 2)}\n`);
   console.log(
-    `Wrote ${buckets.length} buckets, ${enrolmentIds.length} enrolment IDs, ${weightWalks.length} weight walks, ${decisions.length} decisions, ${variantMaps.length} variant maps to ${OUT}`,
+    `Wrote ${buckets.length} buckets, ${enrolmentIds.length} enrolment IDs, ${weightWalks.length} weight walks, ${decisions.length} decisions, ${variantMaps.length} variant maps, ${rolloutDecisions.length} rollout decisions, ${rolloutVariantMaps.length} rollout variant maps to ${OUT}`,
   );
 }
 

@@ -1,6 +1,6 @@
 // Runs the built package in plain Node, with no Bun and no DOM, against a stubbed fetch:
-// every `decisions` vector through the public API, plus seedScript and track (with and without
-// keys). Exits non-zero on any mismatch. This is what proves dist/ carries no Bun or DOM dependency at runtime.
+// every `decisions` and `rolloutDecisions` vector through the public API, plus seedScript and
+// track (with and without keys). Exits non-zero on any mismatch. This is what proves dist/ carries no Bun or DOM dependency at runtime.
 //
 //   bun run build && node scripts/node-smoke.mjs
 import { deepStrictEqual, ok, strictEqual } from 'node:assert/strict';
@@ -73,8 +73,37 @@ strictEqual(requests.length, sentBefore);
 strictEqual(pertento.lastError?.kind, 'bad-request');
 pertento.close();
 
+// The feature-flag vectors, against their own version 2 config.
+const flagFetch = async (url) =>
+  url.endsWith('/sdk/config')
+    ? new Response(JSON.stringify({ ...vectors.rolloutConfig, salt: vectors.decisionSalt }), {
+        status: 200,
+        headers: { etag: '"smoke-flags"', 'content-type': 'application/json' },
+      })
+    : new Response('{"error":"not found"}', { status: 404 });
+const flags = createPertento({
+  websiteId: vectors.rolloutConfig.websiteId,
+  serverKey: 'psk_live_test_00000000000000000000000000000000000000',
+  baseUrl: 'https://tracking.example.test/',
+  fetch: flagFetch,
+});
+ok(await flags.ready(), 'a version 2 config is accepted');
+for (const { name, input, expected } of vectors.rolloutDecisions) {
+  const { key, ...identity } = input;
+  const actual = await flags.getVariant(key, identity);
+  try {
+    deepStrictEqual(actual, expected);
+  } catch {
+    failures += 1;
+    console.error(`MISMATCH ${name}\n  expected ${JSON.stringify(expected)}\n  actual   ${JSON.stringify(actual)}`);
+  }
+}
+strictEqual(flags.lastError, null);
+flags.close();
+
+const total = vectors.decisions.length + vectors.rolloutDecisions.length;
 if (failures > 0) {
-  console.error(`node smoke: ${failures} of ${vectors.decisions.length} decision vectors failed`);
+  console.error(`node smoke: ${failures} of ${total} decision vectors failed`);
   process.exit(1);
 }
-console.log(`node smoke (${process.version}): ${vectors.decisions.length} decision vectors, seedScript and track passed`);
+console.log(`node smoke (${process.version}): ${total} decision vectors, seedScript and track passed`);

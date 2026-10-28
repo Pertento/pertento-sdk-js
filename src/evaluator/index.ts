@@ -10,7 +10,10 @@ export type {
   EnrolledDecision,
   NotEnrolledDecision,
   SdkConfig,
+  SdkConfigVersion,
   SdkExperiment,
+  SdkRing,
+  SdkRollout,
   SdkVariant,
   Seed,
   SeedAssignment,
@@ -22,11 +25,14 @@ export type { DeriveEnrolmentIdParams } from './enrolment-id';
 export {
   ATTRIBUTE_RULE_OPERATORS,
   BUCKET_COUNT,
+  CONFIG_VERSION_WITHOUT_ROLLOUTS,
   DECISION_REASONS,
   EXPERIMENT_BUCKET_ON,
   SDK_CONFIG_VERSION,
+  SUPPORTED_CONFIG_VERSIONS,
   TRACKING_METHODS,
 } from './constants';
+export { configVersionFor, isSupportedConfigVersion } from './config-version';
 export { bucketFor } from './bucket';
 export { decide, decideAll, variantMapFor } from './decide';
 export { deriveEnrolmentId } from './enrolment-id';

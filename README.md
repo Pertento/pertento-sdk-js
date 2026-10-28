@@ -116,8 +116,8 @@ type Decision =
   | { enrolled: false; experimentId: number | null; variantId: number | null; variantKey: string | null; payload: unknown; reason: DecisionReason };
 ```
 
-A visitor who is not enrolled gets control (the variant with the lowest ID), and `reason` says
-why:
+A visitor who is not enrolled gets control (the variant with the lowest ID; for a feature flag,
+Off), and `reason` says why:
 
 | `reason` | Meaning |
 | --- | --- |
@@ -126,6 +126,7 @@ why:
 | `no-id` | No visitor ID or customer ID was given. |
 | `wrong-id-kind` | The experiment assigns on the other kind of ID than the one you passed. |
 | `targeting` | The attribute rules did not match the `attributes` you passed. |
+| `ring` | Feature flags only: a ring (a fixed list of people or a rule) decided this person's side. See [Feature flags](#feature-flags). |
 
 `getVariant` and `getAll` never reject. Before the first config arrives every key is
 `unknown-key`, so a cold start or an outage shows your default experience, never an error.
@@ -158,6 +159,45 @@ The same customer then gets the same variant on every device. Things to know:
 - Pass the ID kind the experiment expects. With only a visitor ID, a customer-ID experiment
   answers control with reason `wrong-id-kind` (and the other way round). Passing both is fine:
   each experiment uses its own kind.
+
+## Feature flags
+
+A feature flag is an experiment with two variants, **Off** and **On**, that is rolled out
+gradually instead of split by weight. You ask for it like any other key:
+
+```ts
+const search = await pertento.getVariant('new-search', {
+  visitorId,
+  attributes: { plan: user.plan, staff: user.isStaff },
+});
+if (search.variantKey === 'on') {
+  // the new code path; search.payload carries the On variant's payload, if it has one
+}
+```
+
+How a flag decides, in this order:
+
+1. **Eligibility.** When the flag has attribute rules and they do not match, the answer is Off
+   with reason `targeting`.
+2. **Rings.** An ordered list of people who get a fixed side whatever the rollout is: staff On, a
+   beta list On, key accounts Off. A ring matches on attributes, on a list of IDs, or on both
+   (visitor IDs compare in any case; customer IDs compare exactly). The first ring that matches
+   decides, and the answer has `enrolled: false` and reason **`ring`**: ring members are chosen,
+   not random, so they are kept out of the On/Off comparison.
+3. **The rollout.** Everyone else has a fixed bucket for the flag and is On when the bucket is
+   below the rollout percentage, Off otherwise, and is **enrolled either way**: the people who are
+   Off are the comparison group, and `track()` credits their conversions too.
+
+**A rollout only ever adds people.** Raising it from 10% to 25% keeps everyone who was On and adds
+more; nobody goes back to Off. Someone moves from On to Off only when the rollout is lowered (or
+switched off), or when they become ineligible or join an Off ring. A flag can also have a
+**holdback**: a share of people who stay Off even at 100%, so there is still something to compare
+against.
+
+Flags need version 0.2.0 or later of this package. A config that contains a flag has config
+version 2; an older SDK treats it as a version it does not understand, so every key answers
+`unknown-key` (your default) until you upgrade. A config without flags stays version 1, which every
+version reads.
 
 ## Reporting conversions from your backend
 

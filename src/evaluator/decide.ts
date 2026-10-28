@@ -13,6 +13,7 @@ import type {
 import { bucketFor } from './bucket';
 import { EXPERIMENT_BUCKET_ON } from './constants';
 import { deriveEnrolmentId } from './enrolment-id';
+import { hasRollout, matchRing, resolveRollout } from './rollout';
 import { matchAttributeRules } from './targeting';
 import { isObject, pickByBucket, sortById } from './weights';
 
@@ -31,6 +32,11 @@ type DecideExperimentParams = DecideIdentity & { experiment: Readonly<SdkExperim
  * 5. only the other kind of ID than bucketOn      → 'wrong-id-kind', control
  * 6. the attribute rules do not match             → 'targeting', control
  * 7. otherwise                                    → enrolled in the variant the bucket falls in
+ *
+ * A feature flag (an experiment with `rollout`) runs the same checks with Off in place of
+ * control, treats a rollout it cannot act on as not running (after check 2), then lets the
+ * first matching ring decide ('ring', not enrolled) and otherwise enrols On when the bucket is
+ * below min(rolloutBp, 10000 - holdbackBp), Off when not (spec/SPEC.md, "Rollouts").
  */
 export async function decide({ config, salt, key, ...identity }: DecideInput): Promise<Decision> {
   const experiment = findExperiment(config, key);
@@ -92,7 +98,9 @@ export async function variantMapFor(params: VariantMapForParams): Promise<Varian
 async function decideExperiment({ experiment, salt, ...identity }: DecideExperimentParams): Promise<Decision> {
   const { visitorId, id, attributes } = identity;
   const variants = sortById(Array.isArray(experiment.variants) ? experiment.variants : []);
-  const control = variants[0] ?? null;
+  // A flag's every not-enrolled answer is Off, which is control when the pair is well formed.
+  const rollout = hasRollout(experiment) ? resolveRollout({ rollout: experiment.rollout, variants }) : null;
+  const control = rollout ? rollout.off : (variants[0] ?? null);
 
   if (experiment.status !== 'Running') {
     // Only Deployed has a deployed variant; any other status (the writer emits none today) is control.
@@ -102,6 +110,9 @@ async function decideExperiment({ experiment, salt, ...identity }: DecideExperim
         : control;
     return notEnrolled({ experiment, variant: deployed, reason: 'not-running' });
   }
+
+  // A rollout naming no variant, or a flag that is not exactly Off and On, admits nobody.
+  if (rollout && !rollout.valid) return notEnrolled({ experiment, variant: control, reason: 'not-running' });
 
   // A bucketOn this evaluator does not know names an ID it cannot be given, so nobody is
   // enrolled rather than guessing at 'visitor' (spec/SPEC.md, "Decisions").
@@ -119,12 +130,19 @@ async function decideExperiment({ experiment, salt, ...identity }: DecideExperim
     return notEnrolled({ experiment, variant: control, reason: 'targeting' });
   }
 
+  if (rollout?.valid) {
+    const caseInsensitive = experiment.bucketOn === 'visitor';
+    const side = matchRing({ rings: rollout.rings, attributes, id: hashId, caseInsensitive });
+    if (side) return notEnrolled({ experiment, variant: side === 'on' ? rollout.on : rollout.off, reason: 'ring' });
+  }
+
   // A customer ID is opaque and case-sensitive: it is turned into its enrolment UUID first,
   // and that UUID is what is bucketed. One customer ID, one enrolment ID, one bucket.
   const enrolAs =
     experiment.bucketOn === 'customer_id' ? await deriveEnrolmentId({ salt, customerId: hashId }) : undefined;
   const bucket = await bucketFor({ salt, experimentId: experiment.id, id: enrolAs ?? hashId });
-  const variant = pickByBucket(variants, bucket);
+  // A flag is sticky: On below the limit, so raising the rollout only adds buckets.
+  const variant = rollout?.valid ? (bucket < rollout.limit ? rollout.on : rollout.off) : pickByBucket(variants, bucket);
   // No variant carries weight (or there are none): the experiment admits nobody. The API
   // refuses to start an experiment whose weights do not sum to 10000, so this needs
   // hand-edited data; to the caller it is the same as not running.
