@@ -25,11 +25,17 @@ export type PertentoErrorKind =
   | 'unsupported-version'
   /** The config belongs to another website than the `websiteId` you passed. Treated as no config. */
   | 'website-mismatch'
-  /** Evaluating a flag failed inside Web Crypto. The call resolved to control. */
+  /**
+   * Evaluating a flag failed inside Web Crypto. From `decide`, the call resolved to control; from
+   * `exposures`, the decision was returned but not reported.
+   */
   | 'evaluation';
 
-/** Which part of the SDK the error came from. */
-export type PertentoErrorSource = 'config' | 'track' | 'decide';
+/**
+ * Which part of the SDK the error came from. `exposures` is the background report of enrolled
+ * and deployed decisions: a batch that failed was dropped, and the decisions themselves were unaffected.
+ */
+export type PertentoErrorSource = 'config' | 'track' | 'decide' | 'exposures';
 
 /** The most recent failure, as `client.lastError` shows it. */
 export type PertentoError = {

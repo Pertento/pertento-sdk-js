@@ -1,3 +1,4 @@
+import type { LoadedConfig } from './config-poller';
 import type { DecideIdentity, Decision, NotEnrolledDecision } from './evaluator';
 import type { PertentoError } from './errors';
 import type { FetchLike } from './http';
@@ -6,6 +7,7 @@ import type { TrackOptions, TrackResult } from './track';
 import { createConfigPoller } from './config-poller';
 import { createErrorReporter } from './errors';
 import { createVisitorId, decide, decideAll, isUuid } from './evaluator';
+import { createExposureReporter, deployedEnrolmentIds } from './exposures';
 import { DEFAULT_BASE_URL, globalFetch } from './http';
 import { seedScript } from './seed-script';
 import { sendTrack } from './track';
@@ -34,6 +36,14 @@ export type PertentoOptions = {
    * and a call that finds it older than `pollIntervalMs` refreshes it without waiting.
    */
   background?: boolean;
+  /**
+   * Report the enrolled decisions `getVariant` and `getAll` make to Pertento (default `true`),
+   * so experiments decided only on your server get results. Decisions served from a deployed
+   * experiment are reported too, and count toward sessions as a deployed variant does. They are
+   * batched and sent at most once; see the README. Decisions you put in a page seed are left to
+   * the browser. Set `false` to send nothing.
+   */
+  exposures?: boolean;
   /** A `fetch` to use instead of the global one (a proxy agent, a test stub). */
   fetch?: FetchLike;
 };
@@ -64,7 +74,8 @@ export type Pertento = {
   createVisitorId: () => string;
   /**
    * `<script>window.PertentoSeed=...;</script>` for the page. Print it in `<head>` before the
-   * Pertento snippet, with the same visitor ID the decisions were made for.
+   * Pertento snippet, with the same visitor ID the decisions were made for. The browser enrols
+   * what the seed carries, so the client stops reporting those decisions itself.
    */
   seedScript: (
     decisions: readonly Decision[] | Readonly<Record<string, Decision>>,
@@ -80,12 +91,23 @@ export type Pertento = {
    */
   track: (event: string, options: TrackOptions) => Promise<TrackResult>;
   /**
-   * The most recent failure, or null. Cleared when the part of the SDK it came from (config
-   * or track) next succeeds. Every kind of failure is also logged once with `console.error`.
+   * Sends the exposures waiting in the queue and resolves when they, and any already on their
+   * way, are done. Never rejects. In an edge worker pass it to `waitUntil`, so the batch is not
+   * cut off when the response is sent.
+   */
+  flush: () => Promise<void>;
+  /**
+   * The most recent failure, or null. Cleared when the part of the SDK it came from (config,
+   * track or exposures) next succeeds. Every kind of failure is also logged once with
+   * `console.error`.
    */
   readonly lastError: PertentoError | null;
-  /** Stops the config timer. Decisions keep using the last config; `track()` keeps working. */
-  close: () => void;
+  /**
+   * Sends the queued exposures and stops the config and exposure timers. Resolves when the
+   * exposures are sent; never rejects. Decisions keep using the last config, `track()` keeps
+   * working, and later exposures are sent on the next call or `flush()`.
+   */
+  close: () => Promise<void>;
 };
 
 const unknownKey = (): NotEnrolledDecision => ({
@@ -141,6 +163,7 @@ export function createPertento(options: PertentoOptions): Pertento {
   const fetch = options.fetch ?? globalFetch;
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   const background = (options.background ?? true) && typeof setInterval === 'function';
+  const exposuresOn = options.exposures ?? true;
 
   const errors = createErrorReporter({ now: Date.now, log: (message) => console.error(message) });
   const poller = createConfigPoller({
@@ -155,6 +178,15 @@ export function createPertento(options: PertentoOptions): Pertento {
     requestTimeoutMs: CONFIG_REQUEST_TIMEOUT_MS,
   });
 
+  const exposures = createExposureReporter({
+    baseUrl,
+    serverKey,
+    fetch,
+    errors,
+    background: background && typeof setTimeout === 'function',
+    enabled: exposuresOn,
+  });
+
   const evaluationFailed = (error: unknown): void => {
     errors.report({
       source: 'decide',
@@ -163,44 +195,82 @@ export function createPertento(options: PertentoOptions): Pertento {
     });
   };
 
+  /** Queues what the decisions report. Never rejects; a deployed decision's ID is derived first. */
+  const recordExposures = async (decisions: readonly Decision[], loaded: LoadedConfig, identity: Identity) => {
+    if (!exposuresOn) return;
+    let deployedIds: Map<Decision, string> | undefined;
+    try {
+      deployedIds = await deployedEnrolmentIds({ decisions, config: loaded.config, salt: loaded.salt, identity });
+    } catch (error) {
+      errors.report({
+        source: 'exposures',
+        kind: 'evaluation',
+        message: `Deployed decisions not reported: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+    exposures.record(decisions, identity.visitorId, deployedIds);
+  };
+
   return {
     ready: (timeoutMs = DEFAULT_READY_TIMEOUT_MS) => poller.ready(timeoutMs),
 
     getVariant: async (key, identity = {}) => {
+      exposures.onCall();
       poller.refreshIfStale();
       const loaded = poller.current();
       if (!loaded || typeof key !== 'string') return unknownKey();
+      const cleaned = cleanIdentity(identity);
+      let decision: Decision;
       try {
-        return await decide({ ...cleanIdentity(identity), config: loaded.config, salt: loaded.salt, key });
+        decision = await decide({ ...cleaned, config: loaded.config, salt: loaded.salt, key });
       } catch (error) {
         evaluationFailed(error);
         return unknownKey();
       }
+      await recordExposures([decision], loaded, cleaned);
+      return decision;
     },
 
     getAll: async (identity = {}) => {
+      exposures.onCall();
       poller.refreshIfStale();
       const loaded = poller.current();
       if (!loaded) return {};
+      const cleaned = cleanIdentity(identity);
+      let decisions: Record<string, Decision>;
       try {
-        return await decideAll({ ...cleanIdentity(identity), config: loaded.config, salt: loaded.salt });
+        decisions = await decideAll({ ...cleaned, config: loaded.config, salt: loaded.salt });
       } catch (error) {
         evaluationFailed(error);
         return {};
       }
+      await recordExposures(Object.values(decisions), loaded, cleaned);
+      return decisions;
     },
 
     createVisitorId,
 
-    seedScript,
+    seedScript: (decisions, visitorId, seedOptions) => {
+      const script = seedScript(decisions, visitorId, seedOptions);
+      const list = Array.isArray(decisions) ? decisions : Object.values(decisions as Record<string, Decision>);
+      exposures.seeded(list, isUuid(visitorId) ? visitorId.toLowerCase() : undefined);
+      return script;
+    },
 
-    track: (event, trackOptions) =>
-      sendTrack({ baseUrl, serverKey, fetch, errors, event, options: trackOptions }),
+    track: (event, trackOptions) => {
+      exposures.onCall();
+      return sendTrack({ baseUrl, serverKey, fetch, errors, event, options: trackOptions });
+    },
+
+    flush: () => exposures.flush(),
 
     get lastError() {
       return errors.last();
     },
 
-    close: () => poller.close(),
+    close: () => {
+      poller.close();
+      return exposures.close();
+    },
   };
 }
